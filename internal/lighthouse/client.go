@@ -19,9 +19,10 @@ func RunLighthouse(target string) (LighthouseResult, error) {
 		target,
 		"--quiet",
 		"--output=json",
-		"--chrome-flags=--headless",
+		"--chrome-flags=--headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage",
 	)
 
+	// "--chrome-flags=--headless",
 	output, err := cmd.Output()
 	if err != nil {
 		return LighthouseResult{}, err
