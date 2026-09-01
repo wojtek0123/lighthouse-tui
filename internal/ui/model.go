@@ -99,7 +99,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
-		a.header.SetWindowWidth(msg.Width)
+		a.header.urlInput.SetWidth(msg.Width)
 	}
 
 	header, cmd := a.header.Update(msg)

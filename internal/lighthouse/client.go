@@ -1,6 +1,7 @@
 package lighthouse
 
 import (
+	"context"
 	"encoding/json"
 	"os/exec"
 )
@@ -12,8 +13,9 @@ type LighthouseResult struct {
 	} `json:"audits"`
 }
 
-func RunLighthouse(target string) (LighthouseResult, error) {
-	cmd := exec.Command(
+func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error) {
+	cmd := exec.CommandContext(
+		ctx,
 		"npx",
 		"lighthouse",
 		target,
