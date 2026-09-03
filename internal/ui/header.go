@@ -2,6 +2,8 @@ package ui
 
 import (
 	"context"
+	"errors"
+	"net/url"
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
@@ -23,6 +25,15 @@ var (
 	inactiveTitleColor  = lipgloss.Color("240") // Dark Gray
 )
 
+type Status int
+
+const (
+	Idle Status = iota
+	Loading
+	Error
+	Loaded
+)
+
 type runningCmd struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -30,14 +41,32 @@ type runningCmd struct {
 
 type Header struct {
 	urlInput textinput.Model
-	loading  bool
 	spinner  spinner.Model
+	status   Status
 
 	cmd    *runningCmd
 	result lighthouse.LighthouseResult
 	err    error
 
 	width int
+}
+
+func validateUrl(rawUrl string) error {
+	u, err := url.ParseRequestURI(rawUrl)
+
+	if err != nil {
+		return err
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return errors.New("URL must have start with 'http' or 'https'")
+	}
+
+	if u.Host == "" {
+		return errors.New("URL doesn't have host part")
+	}
+
+	return nil
 }
 
 func NewHeader() *Header {
@@ -51,7 +80,7 @@ func NewHeader() *Header {
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
-	return &Header{urlInput: ti, spinner: s}
+	return &Header{urlInput: ti, spinner: s, status: Idle}
 }
 
 type LighthouseMsg struct {
@@ -75,7 +104,7 @@ func cancelLighthouseExecution(h Header) (Header, tea.Cmd) {
 		return h, nil
 	}
 
-	h.loading = false
+	h.status = Idle
 	h.cmd.cancel()
 	h.cmd = nil
 
@@ -94,17 +123,39 @@ func (h Header) Update(msg tea.Msg) (Header, tea.Cmd) {
 		switch msg.String() {
 		case "enter":
 			url := h.urlInput.Value()
+			h.err = validateUrl(url)
 
-			h.loading = true
+			if h.err != nil {
+				h.status = Error
+				return h, nil
+			}
+
+			h.status = Loading
 
 			ctx, cancel := context.WithCancel(context.Background())
 
 			h.cmd = &runningCmd{ctx: ctx, cancel: cancel}
 
 			return h, tea.Batch(getLighthouseResult(ctx, url), h.spinner.Tick)
+		case "esc":
+			if h.status == Error {
+				h.err = nil
+				h.status = Idle
 
-		case "esc", "ctrl+c":
+				return h, nil
+			}
+
+			if h.status != Loading {
+				return h, nil
+			}
+
 			return cancelLighthouseExecution(h)
+		case "r":
+			h.urlInput.Reset()
+			h.status = Idle
+			h.err = nil
+
+			return h, nil
 		}
 	case LighthouseMsg:
 		if msg.err != nil {
@@ -114,13 +165,13 @@ func (h Header) Update(msg tea.Msg) (Header, tea.Cmd) {
 		}
 
 		h.result = msg.result
-		h.loading = false
+		h.status = Loaded
 
 		return h, nil
 	case spinner.TickMsg:
 		h.spinner, cmd = h.spinner.Update(msg)
 
-		if h.loading == false {
+		if h.status != Loading {
 			return h, nil
 		}
 
@@ -128,6 +179,11 @@ func (h Header) Update(msg tea.Msg) (Header, tea.Cmd) {
 	}
 
 	h.urlInput, cmd = h.urlInput.Update(msg)
+
+	if h.urlInput.Err != nil {
+		h.err = h.urlInput.Err
+	}
+
 	return h, cmd
 }
 
@@ -136,11 +192,17 @@ func (h Header) GetLighthouseResult() lighthouse.LighthouseResult {
 }
 
 func (h Header) View() tea.View {
-	if h.loading {
+	switch h.status {
+	case Error:
+		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+
+		return tea.NewView(errorStyle.Render("Error:", h.err.Error()))
+	case Loading:
 		return tea.NewView(lipgloss.JoinHorizontal(lipgloss.Left, h.urlInput.Value(), lipgloss.NewStyle().Foreground(lipgloss.Color("245")).MarginLeft(1).MarginRight(1).Render("Loading..."), h.spinner.View()))
-	} else {
+	default:
 		return tea.NewView(lipgloss.JoinHorizontal(lipgloss.Left, h.urlInput.View()))
 	}
+
 }
 
 func (h Header) SetWindowWidth(width int) {

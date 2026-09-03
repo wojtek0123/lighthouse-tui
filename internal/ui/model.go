@@ -114,7 +114,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) View() tea.View {
-	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Center, renderPane("Header", a.header.View().Content, a.width, 2, false), a.result.View().Content))
+	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Center, renderPane("URL", a.header.View().Content, a.width, 2, false), a.result.View().Content))
 
 	v.AltScreen = true
 
