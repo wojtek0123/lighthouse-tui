@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"context"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
 )
 
 func renderPane(title, content string, width, height int, isActive bool) string {
@@ -64,6 +66,15 @@ func renderPane(title, content string, width, height int, isActive bool) string 
 
 type Pane int
 
+type Status int
+
+const (
+	Idle Status = iota
+	Loading
+	Error
+	Loaded
+)
+
 const (
 	HeaderPane Pane = iota
 	ResultPane
@@ -73,20 +84,26 @@ type App struct {
 	// sidebar *Sidebar
 	header *HeaderView
 	result *ResultView
+	modal  *components.Modal
 
-	focused Pane
-	width   int
-	height  int
+	cmd       *runningCmd
+	showModal bool
+	focused   Pane
+
+	width  int
+	height int
 }
 
 func InitialModel() App {
 	header := NewHeader()
 	resultView := NewResultView()
+	modal := components.NewModal()
 
 	return App{
 		header:  header,
 		result:  resultView,
 		focused: HeaderPane,
+		modal:   modal,
 	}
 }
 
@@ -101,6 +118,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
+		case "esc":
+			return cancelLighthouseExecution(a)
+		case "n":
+			a.showModal = true
+			return a, nil
 		case "ctrl+c", "q":
 			return a, tea.Quit
 		case "tab":
@@ -125,7 +147,30 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "1":
 			a.focused = ResultPane
 			return a, nil
+		case "r":
+			if a.header.enteredUrl == "" {
+				return a, nil
+			}
+
+			return a, func() tea.Msg { return EnteredUrlMsg{Url: a.header.enteredUrl} }
 		}
+	case CloseModalMsg:
+		a.showModal = false
+		return a, nil
+	case EnteredUrlMsg:
+		a.header.enteredUrl = msg.Url
+		a.header.loading = true
+
+		ctx, cancel := context.WithCancel(context.Background())
+		a.cmd = &runningCmd{ctx: ctx, cancel: cancel}
+
+		return a, tea.Batch(getLighthouseResult(ctx, msg.Url), a.header.spinner.Tick)
+	case LighthouseMsg:
+		a.result.audits = msg.result
+		a.result.loaded = true
+		a.header.loading = false
+
+		return a, nil
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
@@ -135,19 +180,25 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	header, cmd := a.header.Update(msg)
 	*a.header = header
-
-	if header.status == Loaded {
-		a.result.audits = a.header.GetLighthouseResult()
-		a.result.loaded = true
-	}
-
 	cmds = append(cmds, cmd)
+
+	if a.showModal == true {
+		modal, cmd := a.modal.Update(msg)
+		*a.modal = modal
+		cmds = append(cmds, cmd)
+	}
 
 	return a, tea.Batch(cmds...)
 }
 
 func (a App) View() tea.View {
-	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Center, renderPane("[0] URL", a.header.View().Content, a.width, 2, a.focused == HeaderPane), renderPane("[1] Results", a.result.View().Content, a.width, a.height, a.focused == ResultPane)))
+	var v tea.View
+
+	if a.showModal {
+		v = a.modal.View(a.width, a.height)
+	} else {
+		v = tea.NewView(lipgloss.JoinVertical(lipgloss.Center, renderPane("[0] URL", a.header.View().Content, a.width, 2, a.focused == HeaderPane), renderPane("[1] Results", a.result.View().Content, a.width, a.height, a.focused == ResultPane)))
+	}
 
 	v.AltScreen = true
 
