@@ -175,7 +175,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width = msg.Width
 		a.height = msg.Height
 		a.header.urlInput.SetWidth(msg.Width)
-		a.result.width = msg.Width
 	}
 
 	header, cmd := a.header.Update(msg)
@@ -197,7 +196,7 @@ func (a App) View() tea.View {
 	if a.showModal {
 		v = a.modal.View(a.width, a.height)
 	} else {
-		v = tea.NewView(lipgloss.JoinVertical(lipgloss.Center, renderPane("[0] URL", a.header.View().Content, a.width, 2, a.focused == HeaderPane), renderPane("[1] Results", a.result.View().Content, a.width, a.height, a.focused == ResultPane)))
+		v = tea.NewView(lipgloss.JoinVertical(lipgloss.Center, renderPane("[0] URL", a.header.View().Content, a.width, 2, a.focused == HeaderPane), renderPane("[1] Results", a.result.View(a.width, a.height).Content, a.width, a.height, a.focused == ResultPane)))
 	}
 
 	v.AltScreen = true

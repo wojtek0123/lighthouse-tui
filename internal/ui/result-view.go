@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"strconv"
 
 	"charm.land/bubbles/v2/table"
@@ -16,8 +15,6 @@ type ResultView struct {
 	table  table.Model
 	audits lighthouse.LighthouseResult
 	loaded bool
-
-	width int
 }
 
 func NewResultView() *ResultView {
@@ -36,7 +33,7 @@ func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 	return r, cmd
 }
 
-func (r ResultView) View() tea.View {
+func (r ResultView) View(width, height int) tea.View {
 	if r.loaded {
 
 		fcp := r.audits.Audits["first-contentful-paint"]
@@ -45,7 +42,7 @@ func (r ResultView) View() tea.View {
 		tbt := r.audits.Audits["total-blocking-time"]
 		si := r.audits.Audits["speed-index"]
 
-		tableWidth := r.width - 10
+		tableWidth := width - 10
 		columnWidth := tableWidth / 3
 
 		columns := []table.Column{
@@ -70,9 +67,7 @@ func (r ResultView) View() tea.View {
 		// r.table.SetStyles(s)
 
 		return tea.NewView(r.table.View())
-
-		// return tea.NewView(lipgloss.JoinVertical(lipgloss.Center, sectionHeader.Render("Audits (Performance)"), fmt.Sprintf("%s %f %s", fcp.Title, fcp.NumericValue, fcp.Unit)))
 	} else {
-		return tea.NewView(fmt.Sprintf("RESULT %v", r.loaded))
+		return tea.NewView(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics"))))
 	}
 }
