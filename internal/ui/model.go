@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -63,13 +62,21 @@ func renderPane(title, content string, width, height int, isActive bool) string 
 	return lipgloss.JoinVertical(lipgloss.Left, topBorder, renderedContent)
 }
 
+type Pane int
+
+const (
+	HeaderPane Pane = iota
+	ResultPane
+)
+
 type App struct {
 	// sidebar *Sidebar
-	header *Header
+	header *HeaderView
 	result *ResultView
 
-	width  int
-	height int
+	focused Pane
+	width   int
+	height  int
 }
 
 func InitialModel() App {
@@ -77,8 +84,9 @@ func InitialModel() App {
 	resultView := NewResultView()
 
 	return App{
-		header: header,
-		result: resultView,
+		header:  header,
+		result:  resultView,
+		focused: HeaderPane,
 	}
 }
 
@@ -95,34 +103,53 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return a, tea.Quit
+		case "tab":
+			if a.focused == 1 {
+				a.focused = HeaderPane
+			} else {
+				a.focused++
+			}
+
+			return a, nil
+		case "shift+tab":
+			if a.focused == 0 {
+				a.focused = ResultPane
+			} else {
+				a.focused--
+			}
+
+			return a, nil
+		case "0":
+			a.focused = HeaderPane
+			return a, nil
+		case "1":
+			a.focused = ResultPane
+			return a, nil
 		}
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
 		a.header.urlInput.SetWidth(msg.Width)
+		a.result.width = msg.Width
 	}
 
 	header, cmd := a.header.Update(msg)
 	*a.header = header
 
-	cmds = append(cmds, cmd)
+	if header.status == Loaded {
+		a.result.audits = a.header.GetLighthouseResult()
+		a.result.loaded = true
+	}
 
-	a.result.audits = a.header.GetLighthouseResult()
-	a.result.loaded = true
+	cmds = append(cmds, cmd)
 
 	return a, tea.Batch(cmds...)
 }
 
 func (a App) View() tea.View {
-	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Center, renderPane("URL", a.header.View().Content, a.width, 2, false), a.result.View().Content))
+	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Center, renderPane("[0] URL", a.header.View().Content, a.width, 2, a.focused == HeaderPane), renderPane("[1] Results", a.result.View().Content, a.width, a.height, a.focused == ResultPane)))
 
 	v.AltScreen = true
 
 	return v
 }
-
-func (a App) displaySize() string {
-	return fmt.Sprintf("Width: %d, height: %d", a.width, a.height)
-}
-
-func (a App) setLayout() {}

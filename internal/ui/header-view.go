@@ -17,6 +17,9 @@ import (
 // 2. Add help
 // 3. Add url validation
 // 4. Remove '>' from input
+// pisanie umożliwić dopiero po wciśnięciu 'i'
+// pisanie kończy się po kliknięciu 'enter' lub 'esc' (anuluj)
+// dodać datę kiedy uruchomiony został test
 
 var (
 	activeBorderColor   = lipgloss.Color("62")  // Indigo/Purple
@@ -32,6 +35,7 @@ const (
 	Loading
 	Error
 	Loaded
+	Inserting
 )
 
 type runningCmd struct {
@@ -39,7 +43,7 @@ type runningCmd struct {
 	cancel context.CancelFunc
 }
 
-type Header struct {
+type HeaderView struct {
 	urlInput textinput.Model
 	spinner  spinner.Model
 	status   Status
@@ -69,7 +73,7 @@ func validateUrl(rawUrl string) error {
 	return nil
 }
 
-func NewHeader() *Header {
+func NewHeader() *HeaderView {
 	ti := textinput.New()
 	ti.Placeholder = "Enter url"
 	ti.SetVirtualCursor(true)
@@ -80,7 +84,7 @@ func NewHeader() *Header {
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
-	return &Header{urlInput: ti, spinner: s, status: Idle}
+	return &HeaderView{urlInput: ti, spinner: s, status: Idle}
 }
 
 type LighthouseMsg struct {
@@ -99,7 +103,7 @@ func getLighthouseResult(ctx context.Context, url string) tea.Cmd {
 	}
 }
 
-func cancelLighthouseExecution(h Header) (Header, tea.Cmd) {
+func cancelLighthouseExecution(h HeaderView) (HeaderView, tea.Cmd) {
 	if h.cmd == nil {
 		return h, nil
 	}
@@ -111,11 +115,11 @@ func cancelLighthouseExecution(h Header) (Header, tea.Cmd) {
 	return h, nil
 }
 
-func (h Header) Init() tea.Cmd {
+func (h HeaderView) Init() tea.Cmd {
 	return h.urlInput.Focus()
 }
 
-func (h Header) Update(msg tea.Msg) (Header, tea.Cmd) {
+func (h HeaderView) Update(msg tea.Msg) (HeaderView, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -145,24 +149,36 @@ func (h Header) Update(msg tea.Msg) (Header, tea.Cmd) {
 				return h, nil
 			}
 
+			if h.status == Inserting {
+				h.status = Idle
+				return h, nil
+			}
+
 			if h.status != Loading {
 				return h, nil
 			}
 
 			return cancelLighthouseExecution(h)
 		case "r":
+			if h.status == Loading {
+				return h, nil
+			}
+
 			h.urlInput.Reset()
 			h.status = Idle
 			h.err = nil
 
 			return h, nil
-		}
-	case LighthouseMsg:
-		if msg.err != nil {
-			h.err = msg.err
-
+		case "i":
+			h.status = Inserting
 			return h, nil
 		}
+	case LighthouseMsg:
+		// if msg.err != nil {
+		// 	h.err = msg.err
+		//
+		// 	return h, nil
+		// }
 
 		h.result = msg.result
 		h.status = Loaded
@@ -187,11 +203,11 @@ func (h Header) Update(msg tea.Msg) (Header, tea.Cmd) {
 	return h, cmd
 }
 
-func (h Header) GetLighthouseResult() lighthouse.LighthouseResult {
+func (h HeaderView) GetLighthouseResult() lighthouse.LighthouseResult {
 	return h.result
 }
 
-func (h Header) View() tea.View {
+func (h HeaderView) View() tea.View {
 	switch h.status {
 	case Error:
 		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
@@ -199,12 +215,14 @@ func (h Header) View() tea.View {
 		return tea.NewView(errorStyle.Render("Error:", h.err.Error()))
 	case Loading:
 		return tea.NewView(lipgloss.JoinHorizontal(lipgloss.Left, h.urlInput.Value(), lipgloss.NewStyle().Foreground(lipgloss.Color("245")).MarginLeft(1).MarginRight(1).Render("Loading..."), h.spinner.View()))
-	default:
+	case Inserting:
 		return tea.NewView(lipgloss.JoinHorizontal(lipgloss.Left, h.urlInput.View()))
+	default:
+		return tea.NewView(lipgloss.JoinHorizontal(lipgloss.Left, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("Press 'i' to insert url")))
 	}
 
 }
 
-func (h Header) SetWindowWidth(width int) {
+func (h HeaderView) SetWindowWidth(width int) {
 	h.urlInput.SetWidth(width)
 }

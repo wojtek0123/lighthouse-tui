@@ -10,6 +10,10 @@ type LighthouseResult struct {
 	Audits map[string]struct {
 		NumericValue float64 `json:"numericValue"`
 		DisplayValue string  `json:"displayValue"`
+		Title        string  `json:"title"`
+		Description  string  `json:"description"`
+		Unit         string  `json:"numericUnit"`
+		Score        string  `json:"score"`
 	} `json:"audits"`
 }
 
@@ -21,10 +25,9 @@ func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error)
 		target,
 		"--quiet",
 		"--output=json",
-		"--chrome-flags=--headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage",
+		"--chrome-flags=--headless=new",
 	)
 
-	// "--chrome-flags=--headless",
 	output, err := cmd.Output()
 	if err != nil {
 		return LighthouseResult{}, err
