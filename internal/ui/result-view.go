@@ -73,7 +73,7 @@ func (r ResultView) View(width, height int) tea.View {
 		tabs := []string{"Overview", "Performance"}
 		tabsView := lipgloss.JoinHorizontal(lipgloss.Left, tabs...)
 
-		return tea.NewView(lipgloss.JoinVertical(lipgloss.Top, tabsView, ""))
+		return tea.NewView(lipgloss.JoinVertical(lipgloss.Top, tabsView, "", r.table.View()))
 	} else {
 		return tea.NewView(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics"))))
 	}

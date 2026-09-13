@@ -80,9 +80,11 @@ type App struct {
 	result   *ResultView
 	modal    *UrlModal
 
-	cmd       *runningCmd
+	// cmd       *runningCmd
 	showModal bool
 	focused   Pane
+
+	err error
 
 	width  int
 	height int
@@ -112,8 +114,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "esc":
-			return cancelLighthouseExecution(a)
 		case "n":
 			a.showModal = true
 			return a, nil
@@ -142,26 +142,45 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.focused = ResultPane
 			return a, nil
 		}
+	// case CancelMsg:
+	// 	return cancelLighthouseExecution(a)
 	case CloseModalMsg:
 		a.showModal = false
 		return a, nil
 	case EnteredUrlMsg:
 		ctx, cancel := context.WithCancel(context.Background())
-		a.cmd = &runningCmd{ctx: ctx, cancel: cancel}
 
-		return a, tea.Batch(getLighthouseResult(ctx, msg.Url), a.urlsView.list.InsertItem(0, Item{url: msg.Url, loading: true}), a.urlsView.spinner.Tick)
+		cmd := &runningCmd{ctx: ctx, cancel: cancel}
+
+		index := 0
+
+		return a, tea.Batch(getLighthouseResult(cmd, msg.Url), a.urlsView.list.InsertItem(index, Item{url: msg.Url, loading: true, cmd: cmd}), a.urlsView.spinner.Tick)
 	case RestartMsg:
 		ctx, cancel := context.WithCancel(context.Background())
-		a.cmd = &runningCmd{ctx: ctx, cancel: cancel}
+		cmd := &runningCmd{ctx: ctx, cancel: cancel}
 
-		a.urlsView.SetLoading(msg.Index, true)
+		a.urlsView.SetLoading(cmd, msg.Index, true)
 
-		return a, tea.Batch(getLighthouseResult(ctx, msg.Url), a.urlsView.spinner.Tick)
+		return a, tea.Batch(getLighthouseResult(cmd, msg.Url), a.urlsView.spinner.Tick)
 
 	case LighthouseMsg:
-		a.result.audits = msg.result
-		a.result.loaded = true
-		a.urlsView.StopLoading()
+		if msg.err == nil {
+			a.result.audits = msg.result
+			a.result.loaded = true
+
+			for index, item := range a.urlsView.list.Items() {
+				if i, ok := item.(Item); ok == true {
+					if msg.url == i.url {
+						a.urlsView.StopLoading(index)
+						break
+					}
+				}
+			}
+		} else {
+			a.err = msg.err
+		}
+
+		// a.urlsView.StopLoading(msg.index)
 
 		return a, nil
 	case tea.WindowSizeMsg:
@@ -193,7 +212,13 @@ func (a App) View() tea.View {
 		urlsView := renderPane("[0] Urls", a.urlsView.View(), leftPanelWidth, a.height, a.focused == UrlsPane)
 		resultView := renderPane("[1] Results", a.result.View(a.width-leftPanelWidth, a.height).Content, a.width-leftPanelWidth, a.height, a.focused == ResultPane)
 
-		v = tea.NewView(lipgloss.JoinHorizontal(lipgloss.Top, urlsView, resultView))
+		err := ""
+
+		if a.err != nil {
+			err = a.err.Error()
+		}
+
+		v = tea.NewView(lipgloss.JoinHorizontal(lipgloss.Top, err, urlsView, resultView))
 	}
 
 	v.AltScreen = true
@@ -201,8 +226,7 @@ func (a App) View() tea.View {
 	return v
 }
 
-func (a App) CancelCommand() {
-	a.cmd.cancel()
-	a.cmd = nil
-	a.urlsView.StopLoading()
-}
+// func (a App) CancelCommand() {
+// 	a.cmd.cancel()
+// 	a.cmd = nil
+// }

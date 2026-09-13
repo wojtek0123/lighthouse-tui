@@ -38,6 +38,10 @@ type RestartMsg struct {
 	Index int
 }
 
+type CancelMsg struct {
+	Index int
+}
+
 func restart(url string, index int) tea.Cmd {
 	return func() tea.Msg {
 		return RestartMsg{Url: url, Index: index}
@@ -47,6 +51,8 @@ func restart(url string, index int) tea.Cmd {
 type Item struct {
 	url     string
 	loading bool
+
+	cmd *runningCmd
 }
 
 func (i Item) FilterValue() string { return "" }
@@ -140,6 +146,25 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 		case "d":
 			i := v.list.Index()
 			v.list.RemoveItem(i)
+		case "c", "esc":
+			item, ok := v.list.SelectedItem().(Item)
+
+			if !ok {
+				return v, nil
+			}
+
+			if !item.loading || item.cmd == nil {
+				return v, nil
+			}
+
+			index := v.list.Index()
+
+			item.cmd.cancel()
+			item.loading = false
+			item.cmd = nil
+			v.list.SetItem(index, item)
+
+			return v, nil
 		}
 	}
 
@@ -154,7 +179,7 @@ func (v UrlsView) View() string {
 	return "\n" + v.list.View()
 }
 
-func (v UrlsView) SetLoading(index int, loading bool) {
+func (v UrlsView) SetLoading(cmd *runningCmd, index int, loading bool) {
 	item, ok := v.list.Items()[index].(Item)
 
 	if !ok {
@@ -162,6 +187,7 @@ func (v UrlsView) SetLoading(index int, loading bool) {
 	}
 
 	item.loading = loading
+	item.cmd = cmd
 
 	v.list.SetItem(index, item)
 }
@@ -191,5 +217,12 @@ func (v UrlsView) StopLoading(index int) {
 	}
 
 	i.loading = !i.loading
+	i.cmd = nil
 	v.list.SetItem(index, i)
+}
+
+func cancel(index int) tea.Cmd {
+	return func() tea.Msg {
+		return CancelMsg{Index: index}
+	}
 }

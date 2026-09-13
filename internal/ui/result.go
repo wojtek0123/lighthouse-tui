@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"context"
-
 	tea "charm.land/bubbletea/v2"
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
@@ -13,9 +11,9 @@ type LighthouseMsg struct {
 	err    error
 }
 
-func getLighthouseResult(ctx context.Context, url string) tea.Cmd {
+func getLighthouseResult(cmd *runningCmd, url string) tea.Cmd {
 	return func() tea.Msg {
-		result, err := lighthouse.RunLighthouse(ctx, url)
+		result, err := lighthouse.RunLighthouse(cmd.ctx, url)
 
 		return LighthouseMsg{
 			url:    url,
@@ -23,14 +21,4 @@ func getLighthouseResult(ctx context.Context, url string) tea.Cmd {
 			err:    err,
 		}
 	}
-}
-
-func cancelLighthouseExecution(a App) (App, tea.Cmd) {
-	if a.cmd == nil {
-		return a, nil
-	}
-
-	a.CancelCommand()
-
-	return a, nil
 }

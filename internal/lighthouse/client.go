@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"os/exec"
+	"syscall"
+	"time"
 )
 
 // check if lightyhouse version is supported
@@ -36,7 +38,19 @@ func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error)
 		"--chrome-flags=--headless=new",
 	)
 
+	// Put npx, node, and chrome into one process group
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	// When ctx is canceled, kill the whole process group
+	cmd.Cancel = func() error {
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+
+	// Prevent I/O pipe hanging
+	cmd.WaitDelay = 1 * time.Second
+
 	output, err := cmd.Output()
+
 	if err != nil {
 		return LighthouseResult{}, err
 	}
