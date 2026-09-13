@@ -31,14 +31,14 @@ type runningCmd struct {
 }
 
 type HeaderView struct {
-	urlInput textinput.Model
-	spinner  spinner.Model
-	loading  bool
+	// urlInput textinput.Model
+	spinner spinner.Model
+	loading bool
 
 	enteredUrl string
 }
 
-func NewHeader() *HeaderView {
+func NewHeaderView() *HeaderView {
 	ti := textinput.New()
 	ti.Placeholder = "Enter url"
 	ti.SetVirtualCursor(true)
@@ -49,11 +49,11 @@ func NewHeader() *HeaderView {
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
-	return &HeaderView{urlInput: ti, spinner: s, loading: false}
+	return &HeaderView{spinner: s, loading: false}
 }
 
 func (h HeaderView) Init() tea.Cmd {
-	return h.urlInput.Focus()
+	return nil
 }
 
 func (h HeaderView) Update(msg tea.Msg) (HeaderView, tea.Cmd) {
@@ -78,7 +78,7 @@ func (h HeaderView) Update(msg tea.Msg) (HeaderView, tea.Cmd) {
 
 func (h HeaderView) View() tea.View {
 	if h.loading == true {
-		return tea.NewView(lipgloss.JoinHorizontal(lipgloss.Left, h.urlInput.Value(), lipgloss.NewStyle().Foreground(lipgloss.Color("245")).MarginLeft(1).MarginRight(1).Render("Loading..."), h.spinner.View()))
+		return tea.NewView(lipgloss.JoinHorizontal(lipgloss.Left, h.enteredUrl, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).MarginLeft(1).MarginRight(1).Render("Loading..."), h.spinner.View()))
 	} else {
 		if h.enteredUrl == "" {
 

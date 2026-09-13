@@ -8,6 +8,7 @@ import (
 )
 
 type LighthouseMsg struct {
+	url    string
 	result lighthouse.LighthouseResult
 	err    error
 }
@@ -17,6 +18,7 @@ func getLighthouseResult(ctx context.Context, url string) tea.Cmd {
 		result, err := lighthouse.RunLighthouse(ctx, url)
 
 		return LighthouseMsg{
+			url:    url,
 			result: result,
 			err:    err,
 		}
@@ -28,9 +30,7 @@ func cancelLighthouseExecution(a App) (App, tea.Cmd) {
 		return a, nil
 	}
 
-	// a.status = Idle
-	a.cmd.cancel()
-	a.cmd = nil
+	a.CancelCommand()
 
 	return a, nil
 }

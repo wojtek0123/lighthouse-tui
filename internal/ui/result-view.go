@@ -12,6 +12,10 @@ import (
 var sectionHeader = lipgloss.NewStyle().Bold(true)
 
 type ResultView struct {
+	Tabs       []string
+	TabContent []string
+	activeTab  int
+
 	table  table.Model
 	audits lighthouse.LighthouseResult
 	loaded bool
@@ -66,7 +70,10 @@ func (r ResultView) View(width, height int) tea.View {
 		r.table.SetHeight(100)
 		// r.table.SetStyles(s)
 
-		return tea.NewView(r.table.View())
+		tabs := []string{"Overview", "Performance"}
+		tabsView := lipgloss.JoinHorizontal(lipgloss.Left, tabs...)
+
+		return tea.NewView(lipgloss.JoinVertical(lipgloss.Top, tabsView, ""))
 	} else {
 		return tea.NewView(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics"))))
 	}

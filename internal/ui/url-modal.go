@@ -46,26 +46,27 @@ func validateUrl(rawUrl string) error {
 	return nil
 }
 
-type Modal struct {
-	input textinput.Model
-	err   error
+type UrlModal struct {
+	input    textinput.Model
+	hasError bool
+	err      error
 }
 
-func NewModal() *Modal {
+func NewUrlModal() *UrlModal {
 	ti := textinput.New()
 	ti.Placeholder = "Enter url"
 	ti.SetVirtualCursor(true)
 	ti.Focus()
 	ti.SetValue("https://wojciechpietraszuk.vercel.app")
 
-	return &Modal{input: ti}
+	return &UrlModal{input: ti}
 }
 
-func (m Modal) Init() tea.Cmd {
+func (m UrlModal) Init() tea.Cmd {
 	return nil
 }
 
-func (m Modal) Update(msg tea.Msg) (Modal, tea.Cmd) {
+func (m UrlModal) Update(msg tea.Msg) (UrlModal, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -78,27 +79,36 @@ func (m Modal) Update(msg tea.Msg) (Modal, tea.Cmd) {
 
 			m.err = validateUrl(url)
 
+			if m.err != nil {
+				m.hasError = true
+				return m, nil
+			} else {
+				m.hasError = false
+			}
+
 			return m, tea.Batch(enterUrl(url), closeModal())
 		}
 	}
 
 	m.input, cmd = m.input.Update(msg)
 
-	if m.input.Err != nil {
-		m.err = m.input.Err
-	}
-
 	return m, cmd
 }
 
-func (m Modal) View(width, height int) tea.View {
+func (m UrlModal) View(width, height int) tea.View {
+	// TODO:
+	// - handle smaller resolutions
+
 	m.input.SetWidth(width / 4)
 
 	background := lipgloss.NewStyle().Background(lipgloss.Black).Padding(1, 2)
+	errMsgStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 
-	return tea.NewView(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, background.Render(m.input.View())))
-}
+	errorMsg := ""
 
-func RenderModal(backdrop, modal string) string {
-	return ""
+	if m.hasError == true {
+		errorMsg = errMsgStyle.Render(m.err.Error())
+	}
+
+	return tea.NewView(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, background.Render(lipgloss.JoinVertical(lipgloss.Left, "", m.input.View(), errorMsg))))
 }

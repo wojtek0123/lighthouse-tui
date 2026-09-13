@@ -6,8 +6,11 @@ import (
 	"os/exec"
 )
 
+// check if lightyhouse version is supported
 type LighthouseResult struct {
-	Audits map[string]struct {
+	FetchTime         string `json:"fetchTime"`
+	LighthouseVersion string `json:"lighthouseVersion"`
+	Audits            map[string]struct {
 		NumericValue float64 `json:"numericValue"`
 		DisplayValue string  `json:"displayValue"`
 		Title        string  `json:"title"`
@@ -15,6 +18,11 @@ type LighthouseResult struct {
 		Unit         string  `json:"numericUnit"`
 		Score        string  `json:"score"`
 	} `json:"audits"`
+	Categories map[string]struct {
+		Title string  `json:"title"`
+		Id    string  `json:"id"`
+		Score float64 `json:"score"`
+	}
 }
 
 func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error) {

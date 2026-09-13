@@ -6,7 +6,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
 )
 
 func renderPane(title, content string, width, height int, isActive bool) string {
@@ -26,7 +25,6 @@ func renderPane(title, content string, width, height int, isActive bool) string 
 		Bold(isActive)
 	renderedTitle := titleStyle.Render(" " + title + " ")
 
-	// 2. Construct the custom top border line
 	// Format: ╭─ Title ────────────╮
 	titleLen := lipgloss.Width(renderedTitle)
 	topBarLength := width - titleLen - 2 // -2 for the ╭ and ╮ corners
@@ -49,8 +47,6 @@ func renderPane(title, content string, width, height int, isActive bool) string 
 
 	topBorder := topLeft + horizLineLeft + renderedTitle + horizLineRight + topRight
 
-	// 3. Render the content box
-	// We disable the top border because we just built it manually above
 	contentStyle := lipgloss.NewStyle().
 		Border(border).
 		BorderTop(false).
@@ -60,7 +56,6 @@ func renderPane(title, content string, width, height int, isActive bool) string 
 
 	renderedContent := contentStyle.Render(content)
 
-	// 4. Stack the top border and the content box
 	return lipgloss.JoinVertical(lipgloss.Left, topBorder, renderedContent)
 }
 
@@ -76,15 +71,14 @@ const (
 )
 
 const (
-	HeaderPane Pane = iota
+	UrlsPane Pane = iota
 	ResultPane
 )
 
 type App struct {
-	// sidebar *Sidebar
-	header *HeaderView
-	result *ResultView
-	modal  *components.Modal
+	urlsView *UrlsView
+	result   *ResultView
+	modal    *UrlModal
 
 	cmd       *runningCmd
 	showModal bool
@@ -95,20 +89,20 @@ type App struct {
 }
 
 func InitialModel() App {
-	header := NewHeader()
+	urlsView := NewUrlsView()
 	resultView := NewResultView()
-	modal := components.NewModal()
+	modal := NewUrlModal()
 
 	return App{
-		header:  header,
-		result:  resultView,
-		focused: HeaderPane,
-		modal:   modal,
+		urlsView: urlsView,
+		result:   resultView,
+		focused:  UrlsPane,
+		modal:    modal,
 	}
 }
 
 func (a App) Init() tea.Cmd {
-	return a.header.urlInput.Focus()
+	return nil
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -127,7 +121,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		case "tab":
 			if a.focused == 1 {
-				a.focused = HeaderPane
+				a.focused = UrlsPane
 			} else {
 				a.focused++
 			}
@@ -142,43 +136,41 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			return a, nil
 		case "0":
-			a.focused = HeaderPane
+			a.focused = UrlsPane
 			return a, nil
 		case "1":
 			a.focused = ResultPane
 			return a, nil
-		case "r":
-			if a.header.enteredUrl == "" {
-				return a, nil
-			}
-
-			return a, func() tea.Msg { return EnteredUrlMsg{Url: a.header.enteredUrl} }
 		}
 	case CloseModalMsg:
 		a.showModal = false
 		return a, nil
 	case EnteredUrlMsg:
-		a.header.enteredUrl = msg.Url
-		a.header.loading = true
-
 		ctx, cancel := context.WithCancel(context.Background())
 		a.cmd = &runningCmd{ctx: ctx, cancel: cancel}
 
-		return a, tea.Batch(getLighthouseResult(ctx, msg.Url), a.header.spinner.Tick)
+		return a, tea.Batch(getLighthouseResult(ctx, msg.Url), a.urlsView.list.InsertItem(0, Item{url: msg.Url, loading: true}), a.urlsView.spinner.Tick)
+	case RestartMsg:
+		ctx, cancel := context.WithCancel(context.Background())
+		a.cmd = &runningCmd{ctx: ctx, cancel: cancel}
+
+		a.urlsView.SetLoading(msg.Index, true)
+
+		return a, tea.Batch(getLighthouseResult(ctx, msg.Url), a.urlsView.spinner.Tick)
+
 	case LighthouseMsg:
 		a.result.audits = msg.result
 		a.result.loaded = true
-		a.header.loading = false
+		a.urlsView.StopLoading()
 
 		return a, nil
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
-		a.header.urlInput.SetWidth(msg.Width)
 	}
 
-	header, cmd := a.header.Update(msg)
-	*a.header = header
+	urlsView, cmd := a.urlsView.Update(msg)
+	*a.urlsView = urlsView
 	cmds = append(cmds, cmd)
 
 	if a.showModal == true {
@@ -196,10 +188,21 @@ func (a App) View() tea.View {
 	if a.showModal {
 		v = a.modal.View(a.width, a.height)
 	} else {
-		v = tea.NewView(lipgloss.JoinVertical(lipgloss.Center, renderPane("[0] URL", a.header.View().Content, a.width, 2, a.focused == HeaderPane), renderPane("[1] Results", a.result.View(a.width, a.height).Content, a.width, a.height, a.focused == ResultPane)))
+		const leftPanelWidth = 60
+
+		urlsView := renderPane("[0] Urls", a.urlsView.View(), leftPanelWidth, a.height, a.focused == UrlsPane)
+		resultView := renderPane("[1] Results", a.result.View(a.width-leftPanelWidth, a.height).Content, a.width-leftPanelWidth, a.height, a.focused == ResultPane)
+
+		v = tea.NewView(lipgloss.JoinHorizontal(lipgloss.Top, urlsView, resultView))
 	}
 
 	v.AltScreen = true
 
 	return v
+}
+
+func (a App) CancelCommand() {
+	a.cmd.cancel()
+	a.cmd = nil
+	a.urlsView.StopLoading()
 }
