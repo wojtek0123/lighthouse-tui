@@ -9,13 +9,20 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
 
-var sectionHeader = lipgloss.NewStyle().Bold(true)
+type Tab int
+
+const (
+	Overview Tab = iota
+)
 
 type ResultView struct {
 	Tabs       []string
 	TabContent []string
-	activeTab  int
+	activeTab  Tab
 
+	overviewTab *OverviewTab
+
+	err    error
 	table  table.Model
 	audits lighthouse.LighthouseResult
 	loaded bool
@@ -23,10 +30,13 @@ type ResultView struct {
 
 func NewResultView() *ResultView {
 	t := table.New()
+	overviewTab := NewOverviewTab()
 
 	return &ResultView{
-		loaded: false,
-		table:  t,
+		loaded:      false,
+		table:       t,
+		overviewTab: overviewTab,
+		activeTab:   Overview,
 	}
 }
 
@@ -73,7 +83,22 @@ func (r ResultView) View(width, height int) tea.View {
 		tabs := []string{"Overview", "Performance"}
 		tabsView := lipgloss.JoinHorizontal(lipgloss.Left, tabs...)
 
-		return tea.NewView(lipgloss.JoinVertical(lipgloss.Top, tabsView, "", r.table.View()))
+		tab := ""
+
+		switch r.activeTab {
+		case Overview:
+			categories := r.audits.Categories
+
+			perf := categories[lighthouse.Performance].Score
+			accessibility := categories[lighthouse.Accessibility].Score
+			seo := categories[lighthouse.SEO].Score
+			agentic := categories[lighthouse.AgenticBrowsing].Score
+			practises := categories[lighthouse.BestPractises].Score
+
+			tab = r.overviewTab.View(perf, accessibility, practises, seo, agentic, width)
+		}
+
+		return tea.NewView(lipgloss.JoinVertical(lipgloss.Top, tabsView, "", tab))
 	} else {
 		return tea.NewView(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics"))))
 	}

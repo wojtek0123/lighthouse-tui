@@ -8,6 +8,16 @@ import (
 	"time"
 )
 
+type Category string
+
+const (
+	Performance     Category = "performance"
+	Accessibility   Category = "accessibility"
+	BestPractises   Category = "best-practices"
+	SEO             Category = "seo"
+	AgenticBrowsing Category = "agentic-browsing"
+)
+
 // check if lightyhouse version is supported
 type LighthouseResult struct {
 	FetchTime         string `json:"fetchTime"`
@@ -20,7 +30,7 @@ type LighthouseResult struct {
 		Unit         string  `json:"numericUnit"`
 		Score        string  `json:"score"`
 	} `json:"audits"`
-	Categories map[string]struct {
+	Categories map[Category]struct {
 		Title string  `json:"title"`
 		Id    string  `json:"id"`
 		Score float64 `json:"score"`

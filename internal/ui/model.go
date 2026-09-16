@@ -76,15 +76,12 @@ const (
 )
 
 type App struct {
-	urlsView *UrlsView
-	result   *ResultView
-	modal    *UrlModal
+	urlsView   *UrlsView
+	resultView *ResultView
+	modal      *UrlModal
 
-	// cmd       *runningCmd
 	showModal bool
 	focused   Pane
-
-	err error
 
 	width  int
 	height int
@@ -96,10 +93,10 @@ func InitialModel() App {
 	modal := NewUrlModal()
 
 	return App{
-		urlsView: urlsView,
-		result:   resultView,
-		focused:  UrlsPane,
-		modal:    modal,
+		urlsView:   urlsView,
+		resultView: resultView,
+		focused:    UrlsPane,
+		modal:      modal,
 	}
 }
 
@@ -142,8 +139,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.focused = ResultPane
 			return a, nil
 		}
-	// case CancelMsg:
-	// 	return cancelLighthouseExecution(a)
 	case CloseModalMsg:
 		a.showModal = false
 		return a, nil
@@ -164,23 +159,21 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(getLighthouseResult(cmd, msg.Url), a.urlsView.spinner.Tick)
 
 	case LighthouseMsg:
-		if msg.err == nil {
-			a.result.audits = msg.result
-			a.result.loaded = true
+		// if msg.err == nil {
+		a.resultView.audits = msg.result
+		a.resultView.loaded = true
 
-			for index, item := range a.urlsView.list.Items() {
-				if i, ok := item.(Item); ok == true {
-					if msg.url == i.url {
-						a.urlsView.StopLoading(index)
-						break
-					}
+		for index, item := range a.urlsView.list.Items() {
+			if i, ok := item.(Item); ok == true {
+				if msg.url == i.url {
+					a.urlsView.StopLoading(index)
+					break
 				}
 			}
-		} else {
-			a.err = msg.err
 		}
-
-		// a.urlsView.StopLoading(msg.index)
+		// } else {
+		// 	a.resultView.err = msg.err
+		// }
 
 		return a, nil
 	case tea.WindowSizeMsg:
@@ -210,23 +203,12 @@ func (a App) View() tea.View {
 		const leftPanelWidth = 60
 
 		urlsView := renderPane("[0] Urls", a.urlsView.View(), leftPanelWidth, a.height, a.focused == UrlsPane)
-		resultView := renderPane("[1] Results", a.result.View(a.width-leftPanelWidth, a.height).Content, a.width-leftPanelWidth, a.height, a.focused == ResultPane)
+		resultView := renderPane("[1] Results", a.resultView.View(a.width-leftPanelWidth, a.height).Content, a.width-leftPanelWidth, a.height, a.focused == ResultPane)
 
-		err := ""
-
-		if a.err != nil {
-			err = a.err.Error()
-		}
-
-		v = tea.NewView(lipgloss.JoinHorizontal(lipgloss.Top, err, urlsView, resultView))
+		v = tea.NewView(lipgloss.JoinHorizontal(lipgloss.Top, urlsView, resultView))
 	}
 
 	v.AltScreen = true
 
 	return v
 }
-
-// func (a App) CancelCommand() {
-// 	a.cmd.cancel()
-// 	a.cmd = nil
-// }
