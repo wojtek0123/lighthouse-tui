@@ -3,7 +3,10 @@ package lighthouse
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -28,7 +31,7 @@ type LighthouseResult struct {
 		Title        string  `json:"title"`
 		Description  string  `json:"description"`
 		Unit         string  `json:"numericUnit"`
-		Score        string  `json:"score"`
+		Score        float64 `json:"score"`
 	} `json:"audits"`
 	Categories map[Category]struct {
 		Title string  `json:"title"`
@@ -38,6 +41,12 @@ type LighthouseResult struct {
 }
 
 func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error) {
+	path, err := reportPath()
+
+	if err != nil {
+		return LighthouseResult{}, err
+	}
+
 	cmd := exec.CommandContext(
 		ctx,
 		"npx",
@@ -49,6 +58,7 @@ func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error)
 	)
 
 	// Put npx, node, and chrome into one process group
+	// If process are not grouped the context cancel is canceled only one process
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// When ctx is canceled, kill the whole process group
@@ -67,5 +77,28 @@ func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error)
 
 	var result LighthouseResult
 	err = json.Unmarshal(output, &result)
+
+	os.WriteFile(path, output, 0o644)
 	return result, err
+}
+
+func reportPath() (string, error) {
+	now := time.Now().Format(time.RFC3339)
+	file := fmt.Sprintf("report-%s.json", now)
+	home, err := os.UserHomeDir()
+
+	if err != nil {
+		return "", err
+	}
+
+	appName := "lighthouse-tui"
+
+	base := filepath.Join(home, ".local", "share")
+	dir := filepath.Join(base, appName, "reports")
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+
+	return filepath.Join(dir, file), nil
 }

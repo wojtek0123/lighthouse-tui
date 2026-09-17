@@ -171,6 +171,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+		// a.resultView.err = msg.err
 		// } else {
 		// 	a.resultView.err = msg.err
 		// }
