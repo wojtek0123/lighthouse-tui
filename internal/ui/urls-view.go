@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -9,7 +10,12 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
+
+type SelectedUrlMsg struct {
+	url string
+}
 
 const listHeight = 14
 
@@ -25,8 +31,8 @@ type styles struct {
 func newStyles(darkBG bool) styles {
 	var s styles
 	s.title = lipgloss.NewStyle().MarginLeft(2)
-	s.item = lipgloss.NewStyle().PaddingLeft(4)
-	s.selectedItem = lipgloss.NewStyle().PaddingLeft(2).Background(lipgloss.Color("247")).Width(58)
+	s.item = lipgloss.NewStyle().PaddingLeft(1)
+	s.selectedItem = lipgloss.NewStyle().PaddingLeft(1).Background(lipgloss.Color("60")).Width(58)
 	s.pagination = list.DefaultStyles(darkBG).PaginationStyle.PaddingLeft(4)
 	s.help = list.DefaultStyles(darkBG).HelpStyle.PaddingLeft(4).PaddingBottom(1)
 	s.quitText = lipgloss.NewStyle().Margin(1, 0, 2, 4)
@@ -96,7 +102,18 @@ type UrlsView struct {
 }
 
 func NewUrlsView() *UrlsView {
+	urls, err := lighthouse.GetUrls()
+
+	if err != nil {
+	}
 	items := []list.Item{}
+
+	for _, url := range urls {
+		items = append(items, Item{
+			url:     url,
+			loading: false,
+		})
+	}
 
 	const defaultWidth = 20
 
@@ -109,15 +126,13 @@ func NewUrlsView() *UrlsView {
 	list.SetFilteringEnabled(false)
 	list.SetShowStatusBar(false)
 	list.SetShowHelp(false)
+	list.SetShowTitle(false)
+	list.SetShowPagination(false)
 	list.SetDelegate(itemDelegate{styles: newStyles(false), spinner: spinner})
 
 	return &UrlsView{list: list,
 		spinner: spinner,
 	}
-}
-
-func (v UrlsView) Init() tea.Cmd {
-	return nil
 }
 
 func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
@@ -165,12 +180,42 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 			v.list.SetItem(index, item)
 
 			return v, nil
+		case "j":
+			i, ok := v.list.SelectedItem().(Item)
+
+			if !ok {
+				return v, nil
+			}
+
+			if v.list.Index() < len(v.list.Items())-1 {
+				v.list.Select(v.list.Index() + 1)
+			}
+
+			return v, selectUrl(i.url)
+		case "k":
+			i, ok := v.list.SelectedItem().(Item)
+
+			if !ok {
+				return v, nil
+			}
+
+			if v.list.Index() != 0 {
+				v.list.Select(v.list.Index() - 1)
+			}
+
+			return v, selectUrl(i.url)
 		}
 	}
 
 	var listCmd tea.Cmd
 	v.list, listCmd = v.list.Update(msg)
 	cmds = append(cmds, listCmd)
+
+	i, ok := v.list.SelectedItem().(Item)
+
+	if ok {
+		cmds = append(cmds, selectUrl(i.url))
+	}
 
 	return v, tea.Batch(cmds...)
 }
@@ -225,4 +270,20 @@ func cancel(index int) tea.Cmd {
 	return func() tea.Msg {
 		return CancelMsg{Index: index}
 	}
+}
+
+func selectUrl(url string) tea.Cmd {
+	return func() tea.Msg {
+		return SelectedUrlMsg{url: url}
+	}
+}
+
+func (v UrlsView) GetSelectedItem() (Item, error) {
+	i, ok := v.list.SelectedItem().(Item)
+
+	if !ok {
+		return Item{}, errors.New("Error parsing item")
+	}
+
+	return i, nil
 }

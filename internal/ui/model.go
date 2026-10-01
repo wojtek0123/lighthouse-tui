@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
 
 func renderPane(title, content string, width, height int, isActive bool) string {
@@ -73,12 +74,14 @@ const (
 const (
 	UrlsPane Pane = iota
 	ResultPane
+	ReportsPane
 )
 
 type App struct {
-	urlsView   *UrlsView
-	resultView *ResultView
-	modal      *UrlModal
+	urlsView    *UrlsView
+	resultView  *ResultView
+	reportsView *ReportsView
+	modal       *UrlModal
 
 	showModal bool
 	focused   Pane
@@ -90,13 +93,22 @@ type App struct {
 func InitialModel() App {
 	urlsView := NewUrlsView()
 	resultView := NewResultView()
+	reportsView := NewReportsView()
 	modal := NewUrlModal()
 
+	urls, err := lighthouse.GetUrls()
+
+	if err != nil {
+	}
+
+	reportsView.GetReports(urls[0])
+
 	return App{
-		urlsView:   urlsView,
-		resultView: resultView,
-		focused:    UrlsPane,
-		modal:      modal,
+		urlsView:    urlsView,
+		resultView:  resultView,
+		reportsView: reportsView,
+		focused:     UrlsPane,
+		modal:       modal,
 	}
 }
 
@@ -134,9 +146,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		case "0":
 			a.focused = UrlsPane
+			a.reportsView.active = false
 			return a, nil
 		case "1":
+			a.focused = ReportsPane
+			a.reportsView.active = true
+			return a, nil
+		case "2":
 			a.focused = ResultPane
+			a.reportsView.active = false
 			return a, nil
 		}
 	case CloseModalMsg:
@@ -177,6 +195,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// }
 
 		return a, nil
+	case SelectedUrlMsg:
+		a.reportsView.GetReports(msg.url)
+
+		return a, nil
+
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
@@ -184,6 +207,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	urlsView, cmd := a.urlsView.Update(msg)
 	*a.urlsView = urlsView
+	cmds = append(cmds, cmd)
+
+	reportsView, cmd := a.reportsView.Update(msg)
+	*a.reportsView = reportsView
 	cmds = append(cmds, cmd)
 
 	if a.showModal == true {
@@ -203,10 +230,13 @@ func (a App) View() tea.View {
 	} else {
 		const leftPanelWidth = 60
 
-		urlsView := renderPane("[0] Urls", a.urlsView.View(), leftPanelWidth, a.height, a.focused == UrlsPane)
-		resultView := renderPane("[1] Results", a.resultView.View(a.width-leftPanelWidth, a.height).Content, a.width-leftPanelWidth, a.height, a.focused == ResultPane)
+		urlsView := renderPane("[0] Urls", a.urlsView.View(), leftPanelWidth, a.height/2, a.focused == UrlsPane)
+		reportsView := renderPane("[1] Reports", a.reportsView.View(), leftPanelWidth, a.height/2, a.focused == ReportsPane)
+		resultView := renderPane("[2] Results", a.resultView.View(a.width-leftPanelWidth, a.height).Content, a.width-leftPanelWidth, a.height, a.focused == ResultPane)
 
-		v = tea.NewView(lipgloss.JoinHorizontal(lipgloss.Top, urlsView, resultView))
+		sidePanelView := lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView)
+
+		v = tea.NewView(lipgloss.JoinHorizontal(lipgloss.Top, sidePanelView, resultView))
 	}
 
 	v.AltScreen = true

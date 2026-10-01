@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,7 +42,7 @@ type LighthouseResult struct {
 }
 
 func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error) {
-	path, err := reportPath()
+	path, err := reportPath(target)
 
 	if err != nil {
 		return LighthouseResult{}, err
@@ -82,7 +83,7 @@ func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error)
 	return result, err
 }
 
-func reportPath() (string, error) {
+func reportPath(text string) (string, error) {
 	now := time.Now().Format(time.RFC3339)
 	file := fmt.Sprintf("report-%s.json", now)
 	home, err := os.UserHomeDir()
@@ -91,14 +92,74 @@ func reportPath() (string, error) {
 		return "", err
 	}
 
+	u, err := url.Parse(text)
+
 	appName := "lighthouse-tui"
 
 	base := filepath.Join(home, ".local", "share")
-	dir := filepath.Join(base, appName, "reports")
+	dir := filepath.Join(base, appName, "reports", u.Host)
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
 
 	return filepath.Join(dir, file), nil
+}
+
+func GetReports(url string) ([]string, error) {
+	home, err := os.UserHomeDir()
+
+	if err != nil {
+		return make([]string, 0), err
+	}
+
+	appName := "lighthouse-tui"
+
+	base := filepath.Join(home, ".local", "share")
+	dir := filepath.Join(base, appName, "reports", url)
+
+	entries, err := os.ReadDir(dir)
+
+	if err != nil {
+		return make([]string, 0), err
+	}
+
+	fileNames := []string{}
+
+	for _, entry := range entries {
+		if entry.IsDir() == false {
+			fileNames = append(fileNames, entry.Name())
+		}
+	}
+
+	return fileNames, err
+}
+
+func GetUrls() ([]string, error) {
+	home, err := os.UserHomeDir()
+
+	if err != nil {
+		return make([]string, 0), err
+	}
+
+	appName := "lighthouse-tui"
+
+	base := filepath.Join(home, ".local", "share")
+	dir := filepath.Join(base, appName, "reports")
+
+	entries, err := os.ReadDir(dir)
+
+	if err != nil {
+		return make([]string, 0), err
+	}
+
+	urls := []string{}
+
+	for _, entry := range entries {
+		if entry.IsDir() == true {
+			urls = append(urls, entry.Name())
+		}
+	}
+
+	return urls, err
 }
