@@ -93,6 +93,13 @@ func (v ReportsView) Update(msg tea.Msg) (ReportsView, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
+	switch msg := msg.(type) {
+	case SelectedUrlMsg:
+		v.GetReports(msg.url)
+
+		return v, nil
+	}
+
 	if v.active {
 		v.list, cmd = v.list.Update(msg)
 		cmds = append(cmds, cmd)
@@ -102,7 +109,7 @@ func (v ReportsView) Update(msg tea.Msg) (ReportsView, tea.Cmd) {
 }
 
 func (v ReportsView) View() string {
-	return v.list.View() + "\n" + v.url
+	return v.list.View()
 }
 
 func (v *ReportsView) GetReports(url string) {

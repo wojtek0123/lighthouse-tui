@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 
 	"charm.land/bubbles/v2/list"
@@ -54,25 +55,25 @@ func restart(url string, index int) tea.Cmd {
 	}
 }
 
-type Item struct {
+type UrlItem struct {
 	url     string
 	loading bool
 
 	cmd *runningCmd
 }
 
-func (i Item) FilterValue() string { return "" }
+func (i UrlItem) FilterValue() string { return "" }
 
-type itemDelegate struct {
+type urlItemDelegate struct {
 	spinner *spinner.Model
 	styles  styles
 }
 
-func (d itemDelegate) Height() int                                  { return 1 }
-func (d itemDelegate) Spacing() int                                 { return 0 }
-func (d itemDelegate) Update(msg tea.Msg, list *list.Model) tea.Cmd { return nil }
-func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
-	i, ok := listItem.(Item)
+func (d urlItemDelegate) Height() int                                  { return 1 }
+func (d urlItemDelegate) Spacing() int                                 { return 0 }
+func (d urlItemDelegate) Update(msg tea.Msg, list *list.Model) tea.Cmd { return nil }
+func (d urlItemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+	i, ok := listItem.(UrlItem)
 
 	if !ok {
 		return
@@ -109,7 +110,7 @@ func NewUrlsView() *UrlsView {
 	items := []list.Item{}
 
 	for _, url := range urls {
-		items = append(items, Item{
+		items = append(items, UrlItem{
 			url:     url,
 			loading: false,
 		})
@@ -122,13 +123,13 @@ func NewUrlsView() *UrlsView {
 
 	spinner := &s
 
-	list := list.New(items, itemDelegate{}, defaultWidth, listHeight)
+	list := list.New(items, urlItemDelegate{}, defaultWidth, listHeight)
 	list.SetFilteringEnabled(false)
 	list.SetShowStatusBar(false)
 	list.SetShowHelp(false)
 	list.SetShowTitle(false)
 	list.SetShowPagination(false)
-	list.SetDelegate(itemDelegate{styles: newStyles(false), spinner: spinner})
+	list.SetDelegate(urlItemDelegate{styles: newStyles(false), spinner: spinner})
 
 	return &UrlsView{list: list,
 		spinner: spinner,
@@ -136,6 +137,7 @@ func NewUrlsView() *UrlsView {
 }
 
 func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
+	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -151,7 +153,7 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "r":
-			item, ok := v.list.SelectedItem().(Item)
+			item, ok := v.list.SelectedItem().(UrlItem)
 
 			if !ok {
 				return v, nil
@@ -162,7 +164,7 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 			i := v.list.Index()
 			v.list.RemoveItem(i)
 		case "c", "esc":
-			item, ok := v.list.SelectedItem().(Item)
+			item, ok := v.list.SelectedItem().(UrlItem)
 
 			if !ok {
 				return v, nil
@@ -180,41 +182,18 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 			v.list.SetItem(index, item)
 
 			return v, nil
-		case "j":
-			i, ok := v.list.SelectedItem().(Item)
-
-			if !ok {
-				return v, nil
-			}
-
-			if v.list.Index() < len(v.list.Items())-1 {
-				v.list.Select(v.list.Index() + 1)
-			}
-
-			return v, selectUrl(i.url)
-		case "k":
-			i, ok := v.list.SelectedItem().(Item)
-
-			if !ok {
-				return v, nil
-			}
-
-			if v.list.Index() != 0 {
-				v.list.Select(v.list.Index() - 1)
-			}
-
-			return v, selectUrl(i.url)
 		}
 	}
 
-	var listCmd tea.Cmd
-	v.list, listCmd = v.list.Update(msg)
-	cmds = append(cmds, listCmd)
+	previousIndex := v.list.Index()
 
-	i, ok := v.list.SelectedItem().(Item)
+	v.list, cmd = v.list.Update(msg)
+	cmds = append(cmds, cmd)
 
-	if ok {
-		cmds = append(cmds, selectUrl(i.url))
+	if v.list.Index() != previousIndex {
+		if selectedItem, ok := v.list.SelectedItem().(UrlItem); ok {
+			cmds = append(cmds, selectUrl(selectedItem.url))
+		}
 	}
 
 	return v, tea.Batch(cmds...)
@@ -225,7 +204,7 @@ func (v UrlsView) View() string {
 }
 
 func (v UrlsView) SetLoading(cmd *runningCmd, index int, loading bool) {
-	item, ok := v.list.Items()[index].(Item)
+	item, ok := v.list.Items()[index].(UrlItem)
 
 	if !ok {
 		return
@@ -241,7 +220,7 @@ func (v UrlsView) IsLoading() bool {
 	items := v.list.Items()
 
 	for _, item := range items {
-		i := item.(Item)
+		i := item.(UrlItem)
 
 		if i.loading == true {
 			return true
@@ -252,19 +231,19 @@ func (v UrlsView) IsLoading() bool {
 
 }
 
-func (v UrlsView) StopLoading(index int) {
-	items := v.list.Items()
-
-	i, ok := items[index].(Item)
-
-	if !ok {
-		return
-	}
-
-	i.loading = !i.loading
-	i.cmd = nil
-	v.list.SetItem(index, i)
-}
+// func (v UrlsView) StopLoading(index int) {
+// 	items := v.list.Items()
+//
+// 	i, ok := items[index].(UrlItem)
+//
+// 	if !ok {
+// 		return
+// 	}
+//
+// 	i.loading = !i.loading
+// 	i.cmd = nil
+// 	v.list.SetItem(index, i)
+// }
 
 func cancel(index int) tea.Cmd {
 	return func() tea.Msg {
@@ -278,12 +257,52 @@ func selectUrl(url string) tea.Cmd {
 	}
 }
 
-func (v UrlsView) GetSelectedItem() (Item, error) {
-	i, ok := v.list.SelectedItem().(Item)
+func (v UrlsView) GetSelectedItem() (UrlItem, error) {
+	i, ok := v.list.SelectedItem().(UrlItem)
 
 	if !ok {
-		return Item{}, errors.New("Error parsing item")
+		return UrlItem{}, errors.New("Error parsing item")
 	}
 
 	return i, nil
+}
+
+func AddUniqueUrl(l *list.Model, newItem UrlItem) tea.Cmd {
+	for i, item := range l.Items() {
+		if existingItem, ok := item.(UrlItem); ok {
+			if existingItem.url == newItem.url {
+				existingItem.cmd = newItem.cmd
+				existingItem.loading = true
+
+				return l.SetItem(i, existingItem)
+			}
+		}
+	}
+
+	return l.InsertItem(0, newItem)
+}
+
+func StopLoading(l *list.Model, text string) tea.Cmd {
+	u, err := url.Parse(text)
+
+	if err != nil {
+		return nil
+	}
+
+	for index, item := range l.Items() {
+		if i, ok := item.(UrlItem); ok {
+			if u.Hostname() == i.url {
+
+				if !ok {
+					return nil
+				}
+
+				i.loading = !i.loading
+				i.cmd = nil
+				return l.SetItem(index, i)
+			}
+		}
+	}
+
+	return nil
 }

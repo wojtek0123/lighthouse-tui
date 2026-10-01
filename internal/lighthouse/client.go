@@ -79,7 +79,8 @@ func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error)
 	var result LighthouseResult
 	err = json.Unmarshal(output, &result)
 
-	os.WriteFile(path, output, 0o644)
+	err = os.WriteFile(path, output, 0o644)
+
 	return result, err
 }
 

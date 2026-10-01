@@ -75,9 +75,9 @@ func (m UrlModal) Update(msg tea.Msg) (UrlModal, tea.Cmd) {
 		case "esc":
 			return m, closeModal()
 		case "enter":
-			url := m.input.Value()
+			input := m.input.Value()
 
-			m.err = validateUrl(url)
+			m.err = validateUrl(input)
 
 			if m.err != nil {
 				m.hasError = true
@@ -86,7 +86,7 @@ func (m UrlModal) Update(msg tea.Msg) (UrlModal, tea.Cmd) {
 				m.hasError = false
 			}
 
-			return m, tea.Batch(enterUrl(url), closeModal())
+			return m, tea.Batch(enterUrl(input), closeModal())
 		}
 	}
 

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"net/url"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -73,8 +74,8 @@ const (
 
 const (
 	UrlsPane Pane = iota
-	ResultPane
 	ReportsPane
+	ResultPane
 )
 
 type App struct {
@@ -129,7 +130,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return a, tea.Quit
 		case "tab":
-			if a.focused == 1 {
+			if a.focused == 2 {
 				a.focused = UrlsPane
 			} else {
 				a.focused++
@@ -146,15 +147,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		case "0":
 			a.focused = UrlsPane
-			a.reportsView.active = false
+			a.reportsView.active = a.focused == ReportsPane
 			return a, nil
 		case "1":
 			a.focused = ReportsPane
-			a.reportsView.active = true
+			a.reportsView.active = a.focused == ReportsPane
 			return a, nil
 		case "2":
 			a.focused = ResultPane
-			a.reportsView.active = false
+			a.reportsView.active = a.focused == ReportsPane
 			return a, nil
 		}
 	case CloseModalMsg:
@@ -165,9 +166,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		cmd := &runningCmd{ctx: ctx, cancel: cancel}
 
-		index := 0
+		u, err := url.Parse(msg.Url)
 
-		return a, tea.Batch(getLighthouseResult(cmd, msg.Url), a.urlsView.list.InsertItem(index, Item{url: msg.Url, loading: true, cmd: cmd}), a.urlsView.spinner.Tick)
+		if err != nil {
+			return a, nil
+		}
+
+		return a, tea.Batch(getLighthouseResult(cmd, msg.Url), AddUniqueUrl(&a.urlsView.list, UrlItem{url: u.Hostname(), loading: true, cmd: cmd}), a.urlsView.spinner.Tick)
 	case RestartMsg:
 		ctx, cancel := context.WithCancel(context.Background())
 		cmd := &runningCmd{ctx: ctx, cancel: cancel}
@@ -177,28 +182,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(getLighthouseResult(cmd, msg.Url), a.urlsView.spinner.Tick)
 
 	case LighthouseMsg:
-		// if msg.err == nil {
+		if msg.err != nil {
+			return a, nil
+		}
+
 		a.resultView.audits = msg.result
 		a.resultView.loaded = true
 
-		for index, item := range a.urlsView.list.Items() {
-			if i, ok := item.(Item); ok == true {
-				if msg.url == i.url {
-					a.urlsView.StopLoading(index)
-					break
-				}
-			}
-		}
-		// a.resultView.err = msg.err
-		// } else {
-		// 	a.resultView.err = msg.err
-		// }
-
-		return a, nil
-	case SelectedUrlMsg:
-		a.reportsView.GetReports(msg.url)
-
-		return a, nil
+		return a, StopLoading(&a.urlsView.list, msg.url)
 
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
