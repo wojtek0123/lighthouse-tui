@@ -5,8 +5,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-type Modal struct {
-}
+type Modal struct{}
 
 func NewModal() *Modal {
 	return &Modal{}
@@ -29,7 +28,6 @@ func (m Modal) Update(msg tea.Msg) (Modal, tea.Cmd) {
 }
 
 func (m Modal) View(width, height int) tea.View {
-
 	background := lipgloss.NewStyle().Background(lipgloss.Black).Padding(1, 2)
 
 	return tea.NewView(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, background.Render("MODAL")))

@@ -31,16 +31,12 @@ func renderPane(title, content string, width, height int, isActive bool) string 
 	titleLen := lipgloss.Width(renderedTitle)
 	topBarLength := width - titleLen - 2 // -2 for the ╭ and ╮ corners
 
-	// Ensure we don't panic on extremely small terminals
-	if topBarLength < 0 {
-		topBarLength = 0
-	}
+	topBarLength = max(topBarLength, 0)
 
 	leftDashCount := 1 // We want one dash before the title
 	rightDashCount := topBarLength - leftDashCount
-	if rightDashCount < 0 {
-		rightDashCount = 0
-	}
+
+	rightDashCount = max(rightDashCount, 0)
 
 	topLeft := borderStyle.Render(border.TopLeft)
 	topRight := borderStyle.Render(border.TopRight)
@@ -78,7 +74,7 @@ const (
 	ResultPane
 )
 
-type App struct {
+type Model struct {
 	urlsView    *UrlsView
 	resultView  *ResultView
 	reportsView *ReportsView
@@ -89,22 +85,27 @@ type App struct {
 
 	width  int
 	height int
+
+	error error
 }
 
-func InitialModel() App {
-	urlsView := NewUrlsView()
-	resultView := NewResultView()
-	reportsView := NewReportsView()
-	modal := NewUrlModal()
-
+func InitialModel() Model {
 	urls, err := lighthouse.GetUrls()
 
 	if err != nil {
+		return Model{
+			error: err,
+		}
 	}
+
+	urlsView := NewUrlsView(true)
+	resultView := NewResultView()
+	reportsView := NewReportsView(false)
+	modal := NewUrlModal()
 
 	reportsView.GetReports(urls[0])
 
-	return App{
+	return Model{
 		urlsView:    urlsView,
 		resultView:  resultView,
 		reportsView: reportsView,
@@ -113,11 +114,11 @@ func InitialModel() App {
 	}
 }
 
-func (a App) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
@@ -125,106 +126,107 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "n":
-			a.showModal = true
-			return a, nil
+			m.showModal = true
+			return m, nil
 		case "ctrl+c", "q":
-			return a, tea.Quit
+			return m, tea.Quit
 		case "tab":
-			if a.focused == 2 {
-				a.focused = UrlsPane
+			if m.focused == 2 {
+				m.focused = UrlsPane
 			} else {
-				a.focused++
+				m.focused++
 			}
 
-			a.updateActive()
+			m.updateActive()
 
-			return a, nil
+			return m, nil
 		case "shift+tab":
-			if a.focused == 0 {
-				a.focused = ResultPane
+			if m.focused == 0 {
+				m.focused = ResultPane
 			} else {
-				a.focused--
+				m.focused--
 			}
 
-			a.updateActive()
-
-			return a, nil
+			m.updateActive()
+			return m, nil
 		case "0":
-			a.changeView(UrlsPane)
-			return a, nil
+			m.changeView(UrlsPane)
+			return m, nil
 		case "1":
-			a.changeView(ReportsPane)
-			return a, nil
+			m.changeView(ReportsPane)
+			return m, nil
 		case "2":
-			a.changeView(ResultPane)
-			return a, nil
+			m.changeView(ResultPane)
+			return m, nil
 		}
 	case CloseModalMsg:
-		a.showModal = false
-		return a, nil
+		m.showModal = false
+		return m, nil
 	case EnteredUrlMsg:
 		ctx, cancel := context.WithCancel(context.Background())
 
 		cmd := &runningCmd{ctx: ctx, cancel: cancel}
 
 		u, err := url.Parse(msg.Url)
-
 		if err != nil {
-			return a, nil
+			return m, nil
 		}
 
-		return a, tea.Batch(getLighthouseResult(cmd, msg.Url), AddUniqueUrl(&a.urlsView.list, UrlItem{url: u.Hostname(), loading: true, cmd: cmd}), a.urlsView.spinner.Tick)
+		return m, tea.Batch(getLighthouseResult(cmd, msg.Url), AddUniqueUrl(&m.urlsView.list, UrlItem{url: u.Hostname(), loading: true, cmd: cmd}), m.urlsView.spinner.Tick)
 	case RestartMsg:
 		ctx, cancel := context.WithCancel(context.Background())
 		cmd := &runningCmd{ctx: ctx, cancel: cancel}
 
-		a.urlsView.SetLoading(cmd, msg.Index, true)
+		m.urlsView.SetLoading(cmd, msg.Index, true)
 
-		return a, tea.Batch(getLighthouseResult(cmd, msg.Url), a.urlsView.spinner.Tick)
+		return m, tea.Batch(getLighthouseResult(cmd, msg.Url), m.urlsView.spinner.Tick)
 
 	case LighthouseMsg:
 		if msg.err != nil {
-			return a, nil
+			return m, nil
 		}
 
-		a.resultView.audits = msg.result
-		a.resultView.loaded = true
+		m.resultView.audits = msg.result
+		m.resultView.loaded = true
 
-		return a, StopLoading(&a.urlsView.list, msg.url)
+		return m, StopLoading(&m.urlsView.list, msg.url)
 
 	case tea.WindowSizeMsg:
-		a.width = msg.Width
-		a.height = msg.Height
+		m.width = msg.Width
+		m.height = msg.Height
 	}
 
-	urlsView, cmd := a.urlsView.Update(msg)
-	*a.urlsView = urlsView
+	urlsView, cmd := m.urlsView.Update(msg)
+	*m.urlsView = urlsView
 	cmds = append(cmds, cmd)
 
-	reportsView, cmd := a.reportsView.Update(msg)
-	*a.reportsView = reportsView
+	reportsView, cmd := m.reportsView.Update(msg)
+	*m.reportsView = reportsView
 	cmds = append(cmds, cmd)
 
-	if a.showModal == true {
-		modal, cmd := a.modal.Update(msg)
-		*a.modal = modal
+	if m.showModal {
+		modal, cmd := m.modal.Update(msg)
+		*m.modal = modal
 		cmds = append(cmds, cmd)
 	}
 
-	return a, tea.Batch(cmds...)
+	return m, tea.Batch(cmds...)
 }
 
-func (a App) View() tea.View {
+func (m Model) View() tea.View {
 	var v tea.View
 
-	if a.showModal {
-		v = a.modal.View(a.width, a.height)
+	if m.error != nil {
+		v = tea.NewView(m.error.Error())
+	} else if m.showModal {
+		v = m.modal.View(m.width, m.height)
 	} else {
-		const leftPanelWidth = 60
+		asideWidth := m.width / 3
+		contentHeight := m.height - 2
 
-		urlsView := renderPane("[0] Urls", a.urlsView.View(), leftPanelWidth, a.height/2, a.focused == UrlsPane)
-		reportsView := renderPane("[1] Reports", a.reportsView.View(), leftPanelWidth, a.height/2, a.focused == ReportsPane)
-		resultView := renderPane("[2] Results", a.resultView.View(a.width-leftPanelWidth, a.height).Content, a.width-leftPanelWidth, a.height, a.focused == ResultPane)
+		urlsView := renderPane("[0] Urls", m.urlsView.View(), asideWidth, m.height/2, m.focused == UrlsPane)
+		reportsView := renderPane("[1] Reports", m.reportsView.View(), asideWidth, m.height/2, m.focused == ReportsPane)
+		resultView := renderPane("[2] Results", m.resultView.View(m.width-asideWidth, contentHeight), m.width-asideWidth, m.height, m.focused == ResultPane)
 
 		sidePanelView := lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView)
 
@@ -236,12 +238,12 @@ func (a App) View() tea.View {
 	return v
 }
 
-func (a *App) changeView(view Pane) {
-	a.focused = view
-	a.updateActive()
+func (m *Model) changeView(view Pane) {
+	m.focused = view
+	m.updateActive()
 }
 
-func (a *App) updateActive() {
-	a.reportsView.SetActive(a.focused == ReportsPane)
-	a.urlsView.SetActive(a.focused == UrlsPane)
+func (m *Model) updateActive() {
+	m.reportsView.SetActive(m.focused == ReportsPane)
+	m.urlsView.SetActive(m.focused == UrlsPane)
 }

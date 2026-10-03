@@ -106,7 +106,7 @@ type UrlsView struct {
 	active bool
 }
 
-func NewUrlsView() *UrlsView {
+func NewUrlsView(active bool) *UrlsView {
 	urls, err := lighthouse.GetUrls()
 
 	if err != nil {
@@ -126,7 +126,7 @@ func NewUrlsView() *UrlsView {
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	spinner := &s
-	delegate := &urlItemDelegate{styles: newStyles(false), focus: true, spinner: spinner}
+	delegate := &urlItemDelegate{styles: newStyles(false), focus: active, spinner: spinner}
 
 	list := list.New(items, urlItemDelegate{}, defaultWidth, listHeight)
 	list.SetFilteringEnabled(false)
@@ -138,7 +138,7 @@ func NewUrlsView() *UrlsView {
 
 	return &UrlsView{list: list,
 		spinner:  spinner,
-		active:   true,
+		active:   active,
 		delegate: delegate,
 	}
 }

@@ -59,7 +59,7 @@ func (d reportItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 	fmt.Fprint(w, fn(str))
 }
 
-func NewReportsView() *ReportsView {
+func NewReportsView(active bool) *ReportsView {
 	urls, err := lighthouse.GetUrls()
 
 	if err != nil {
@@ -80,7 +80,7 @@ func NewReportsView() *ReportsView {
 
 	list := list.New(items, reportItemDelegate{}, 20, listHeight)
 
-	delegate := &reportItemDelegate{styles: newStyles(false), focus: false}
+	delegate := &reportItemDelegate{styles: newStyles(false), focus: active}
 
 	list.SetFilteringEnabled(false)
 	list.SetShowStatusBar(false)
@@ -92,6 +92,7 @@ func NewReportsView() *ReportsView {
 		list:     list,
 		url:      urls[0],
 		delegate: delegate,
+		active:   active,
 	}
 }
 

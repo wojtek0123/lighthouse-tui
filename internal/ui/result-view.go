@@ -47,7 +47,7 @@ func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 	return r, cmd
 }
 
-func (r ResultView) View(width, height int) tea.View {
+func (r ResultView) View(width, height int) string {
 	if r.loaded {
 
 		fcp := r.audits.Audits["first-contentful-paint"]
@@ -77,7 +77,7 @@ func (r ResultView) View(width, height int) tea.View {
 		r.table.SetColumns(columns)
 		r.table.SetRows(rows)
 		r.table.SetWidth(tableWidth)
-		r.table.SetHeight(100)
+		r.table.SetHeight(height / 2)
 		// r.table.SetStyles(s)
 
 		tabs := []string{"Overview", "Performance"}
@@ -98,8 +98,8 @@ func (r ResultView) View(width, height int) tea.View {
 			tab = r.overviewTab.View(perf, accessibility, practises, seo, agentic, width)
 		}
 
-		return tea.NewView(lipgloss.JoinVertical(lipgloss.Top, tabsView, "", tab))
+		return lipgloss.JoinVertical(lipgloss.Top, tabsView, "", tab)
 	} else {
-		return tea.NewView(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics"))))
+		return lipgloss.Place(width, height-2, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics")))
 	}
 }
