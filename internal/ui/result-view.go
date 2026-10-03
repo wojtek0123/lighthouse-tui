@@ -24,7 +24,7 @@ type ResultView struct {
 
 	err    error
 	table  table.Model
-	audits lighthouse.LighthouseResult
+	audits lighthouse.LighthouseReport
 	loaded bool
 }
 

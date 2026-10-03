@@ -172,7 +172,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		return m, tea.Batch(getLighthouseResult(cmd, msg.Url), AddUniqueUrl(&m.urlsView.list, UrlItem{url: u.Hostname(), loading: true, cmd: cmd}), m.urlsView.spinner.Tick)
+		return m, tea.Batch(getLighthouseResult(cmd, msg.Url), AddUniqueUrl(&m.urlsView.list, UrlItem{hostname: u.Hostname(), loading: true, cmd: cmd}), m.urlsView.spinner.Tick)
 	case RestartMsg:
 		ctx, cancel := context.WithCancel(context.Background())
 		cmd := &runningCmd{ctx: ctx, cancel: cancel}
@@ -180,16 +180,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.urlsView.SetLoading(cmd, msg.Index, true)
 
 		return m, tea.Batch(getLighthouseResult(cmd, msg.Url), m.urlsView.spinner.Tick)
-
 	case LighthouseMsg:
 		if msg.err != nil {
 			return m, nil
 		}
 
-		m.resultView.audits = msg.result
+		m.resultView.audits = msg.result.Report
 		m.resultView.loaded = true
 
-		return m, StopLoading(&m.urlsView.list, msg.url)
+		cmds = append(cmds, StopLoading(&m.urlsView.list, msg.url))
+
+		u, err := url.Parse(msg.url)
+
+		if err != nil {
+			return m, nil
+		}
+
+		if item, ok := m.urlsView.list.SelectedItem().(UrlItem); ok && item.hostname == u.Hostname() {
+			cmds = append(cmds, m.reportsView.InsertReport(msg.result.ReportName))
+		}
+
+		return m, tea.Batch(cmds...)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width

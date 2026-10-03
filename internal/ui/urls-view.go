@@ -56,8 +56,8 @@ func restart(url string, index int) tea.Cmd {
 }
 
 type UrlItem struct {
-	url     string
-	loading bool
+	hostname string
+	loading  bool
 
 	cmd *runningCmd
 }
@@ -86,7 +86,7 @@ func (d urlItemDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 		spinner = d.spinner.View()
 	}
 
-	str := fmt.Sprintf("%s %s", i.url, spinner)
+	str := fmt.Sprintf("%s %s", i.hostname, spinner)
 
 	fn := d.styles.item.Render
 	if index == m.Index() && d.focus {
@@ -115,8 +115,8 @@ func NewUrlsView(active bool) *UrlsView {
 
 	for _, url := range urls {
 		items = append(items, UrlItem{
-			url:     url,
-			loading: false,
+			hostname: url,
+			loading:  false,
 		})
 	}
 
@@ -166,7 +166,7 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 				return v, nil
 			}
 
-			return v, restart(item.url, v.list.Index())
+			return v, restart(item.hostname, v.list.Index())
 		case "d":
 			i := v.list.Index()
 			v.list.RemoveItem(i)
@@ -201,7 +201,7 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 
 	if v.list.Index() != previousIndex {
 		if selectedItem, ok := v.list.SelectedItem().(UrlItem); ok {
-			cmds = append(cmds, selectUrl(selectedItem.url))
+			cmds = append(cmds, selectUrl(selectedItem.hostname))
 		}
 	}
 
@@ -279,7 +279,7 @@ func (v UrlsView) GetSelectedItem() (UrlItem, error) {
 func AddUniqueUrl(l *list.Model, newItem UrlItem) tea.Cmd {
 	for i, item := range l.Items() {
 		if existingItem, ok := item.(UrlItem); ok {
-			if existingItem.url == newItem.url {
+			if existingItem.hostname == newItem.hostname {
 				existingItem.cmd = newItem.cmd
 				existingItem.loading = true
 
@@ -300,7 +300,7 @@ func StopLoading(l *list.Model, text string) tea.Cmd {
 
 	for index, item := range l.Items() {
 		if i, ok := item.(UrlItem); ok {
-			if u.Hostname() == i.url {
+			if u.Hostname() == i.hostname {
 
 				if !ok {
 					return nil

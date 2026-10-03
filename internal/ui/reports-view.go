@@ -26,7 +26,7 @@ type ReportsView struct {
 	active bool
 }
 
-func (i ReportItem) FilterValue() string { return "" }
+func (i ReportItem) FilterValue() string { return i.filename }
 
 type reportItemDelegate struct {
 	styles styles
@@ -87,6 +87,7 @@ func NewReportsView(active bool) *ReportsView {
 	list.SetShowHelp(false)
 	list.SetDelegate(delegate)
 	list.SetShowTitle(false)
+	list.SetShowPagination(false)
 
 	return &ReportsView{
 		list:     list,
@@ -134,6 +135,15 @@ func (v *ReportsView) GetReports(url string) {
 	v.list.SetItems(items)
 	v.list.ResetSelected()
 	v.url = url
+}
+
+func (v *ReportsView) InsertReport(reportName string) tea.Cmd {
+	items := v.list.Items()
+	items = append(items, ReportItem{filename: reportName})
+	cmd := v.list.SetItems(items)
+	v.list.Select(len(v.list.Items()))
+
+	return cmd
 }
 
 func (v *ReportsView) SetActive(active bool) {

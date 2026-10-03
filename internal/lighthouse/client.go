@@ -22,8 +22,13 @@ const (
 	AgenticBrowsing Category = "agentic-browsing"
 )
 
-// check if lightyhouse version is supported
 type LighthouseResult struct {
+	Report     LighthouseReport
+	ReportName string
+}
+
+// check if lightyhouse version is supported
+type LighthouseReport struct {
 	FetchTime         string `json:"fetchTime"`
 	LighthouseVersion string `json:"lighthouseVersion"`
 	Audits            map[string]struct {
@@ -42,11 +47,6 @@ type LighthouseResult struct {
 }
 
 func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error) {
-	path, err := reportPath(target)
-
-	if err != nil {
-		return LighthouseResult{}, err
-	}
 
 	cmd := exec.CommandContext(
 		ctx,
@@ -76,17 +76,35 @@ func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error)
 		return LighthouseResult{}, err
 	}
 
-	var result LighthouseResult
-	err = json.Unmarshal(output, &result)
+	filename := reportName()
+
+	path, err := reportPath(target, filename)
+
+	if err != nil {
+		return LighthouseResult{}, err
+	}
+
+	var report LighthouseReport
+	err = json.Unmarshal(output, &report)
 
 	err = os.WriteFile(path, output, 0o644)
 
-	return result, err
+	return LighthouseResult{
+		Report:     report,
+		ReportName: filename,
+	}, err
 }
 
-func reportPath(text string) (string, error) {
+func reportName() string {
 	now := time.Now().Format(time.RFC3339)
-	file := fmt.Sprintf("report-%s.json", now)
+	name := fmt.Sprintf("report-%s.json", now)
+
+	return name
+}
+
+func reportPath(text string, fileName string) (string, error) {
+	// now := time.Now().Format(time.RFC3339)
+	// file := fmt.Sprintf("report-%s.json", now)
 	home, err := os.UserHomeDir()
 
 	if err != nil {
@@ -104,7 +122,7 @@ func reportPath(text string) (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(dir, file), nil
+	return filepath.Join(dir, fileName), nil
 }
 
 func GetReports(url string) ([]string, error) {
