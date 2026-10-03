@@ -67,6 +67,7 @@ func (i UrlItem) FilterValue() string { return "" }
 type urlItemDelegate struct {
 	spinner *spinner.Model
 	styles  styles
+	focus   bool
 }
 
 func (d urlItemDelegate) Height() int                                  { return 1 }
@@ -88,7 +89,7 @@ func (d urlItemDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 	str := fmt.Sprintf("%s %s", i.url, spinner)
 
 	fn := d.styles.item.Render
-	if index == m.Index() {
+	if index == m.Index() && d.focus {
 		fn = func(s ...string) string {
 			return d.styles.selectedItem.Render(strings.Join(s, " "))
 		}
@@ -98,8 +99,11 @@ func (d urlItemDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 }
 
 type UrlsView struct {
-	list    list.Model
-	spinner *spinner.Model
+	list     list.Model
+	spinner  *spinner.Model
+	delegate *urlItemDelegate
+
+	active bool
 }
 
 func NewUrlsView() *UrlsView {
@@ -122,6 +126,7 @@ func NewUrlsView() *UrlsView {
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	spinner := &s
+	delegate := &urlItemDelegate{styles: newStyles(false), focus: true, spinner: spinner}
 
 	list := list.New(items, urlItemDelegate{}, defaultWidth, listHeight)
 	list.SetFilteringEnabled(false)
@@ -129,10 +134,12 @@ func NewUrlsView() *UrlsView {
 	list.SetShowHelp(false)
 	list.SetShowTitle(false)
 	list.SetShowPagination(false)
-	list.SetDelegate(urlItemDelegate{styles: newStyles(false), spinner: spinner})
+	list.SetDelegate(delegate)
 
 	return &UrlsView{list: list,
-		spinner: spinner,
+		spinner:  spinner,
+		active:   true,
+		delegate: delegate,
 	}
 }
 
@@ -187,8 +194,10 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 
 	previousIndex := v.list.Index()
 
-	v.list, cmd = v.list.Update(msg)
-	cmds = append(cmds, cmd)
+	if v.active {
+		v.list, cmd = v.list.Update(msg)
+		cmds = append(cmds, cmd)
+	}
 
 	if v.list.Index() != previousIndex {
 		if selectedItem, ok := v.list.SelectedItem().(UrlItem); ok {
@@ -305,4 +314,9 @@ func StopLoading(l *list.Model, text string) tea.Cmd {
 	}
 
 	return nil
+}
+
+func (v *UrlsView) SetActive(active bool) {
+	v.active = active
+	v.delegate.focus = active
 }

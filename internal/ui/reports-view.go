@@ -19,7 +19,9 @@ type ReportItem struct {
 }
 
 type ReportsView struct {
-	list   list.Model
+	list     list.Model
+	delegate *reportItemDelegate
+
 	url    string
 	active bool
 }
@@ -28,6 +30,7 @@ func (i ReportItem) FilterValue() string { return "" }
 
 type reportItemDelegate struct {
 	styles styles
+	focus  bool
 }
 
 func (d reportItemDelegate) Height() int                                  { return 1 }
@@ -47,7 +50,7 @@ func (d reportItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 	str := fmt.Sprintf("%s", i.filename)
 
 	fn := d.styles.item.Render
-	if index == m.Index() {
+	if index == m.Index() && d.focus {
 		fn = func(s ...string) string {
 			return d.styles.selectedItem.Render(strings.Join(s, " "))
 		}
@@ -77,15 +80,18 @@ func NewReportsView() *ReportsView {
 
 	list := list.New(items, reportItemDelegate{}, 20, listHeight)
 
+	delegate := &reportItemDelegate{styles: newStyles(false), focus: false}
+
 	list.SetFilteringEnabled(false)
 	list.SetShowStatusBar(false)
 	list.SetShowHelp(false)
-	list.SetDelegate(reportItemDelegate{styles: newStyles(false)})
+	list.SetDelegate(delegate)
 	list.SetShowTitle(false)
 
 	return &ReportsView{
-		list: list,
-		url:  urls[0],
+		list:     list,
+		url:      urls[0],
+		delegate: delegate,
 	}
 }
 
@@ -125,5 +131,11 @@ func (v *ReportsView) GetReports(url string) {
 	}
 
 	v.list.SetItems(items)
+	v.list.ResetSelected()
 	v.url = url
+}
+
+func (v *ReportsView) SetActive(active bool) {
+	v.active = active
+	v.delegate.focus = active
 }

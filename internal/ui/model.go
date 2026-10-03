@@ -136,6 +136,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.focused++
 			}
 
+			a.updateActive()
+
 			return a, nil
 		case "shift+tab":
 			if a.focused == 0 {
@@ -144,18 +146,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.focused--
 			}
 
+			a.updateActive()
+
 			return a, nil
 		case "0":
-			a.focused = UrlsPane
-			a.reportsView.active = a.focused == ReportsPane
+			a.changeView(UrlsPane)
 			return a, nil
 		case "1":
-			a.focused = ReportsPane
-			a.reportsView.active = a.focused == ReportsPane
+			a.changeView(ReportsPane)
 			return a, nil
 		case "2":
-			a.focused = ResultPane
-			a.reportsView.active = a.focused == ReportsPane
+			a.changeView(ResultPane)
 			return a, nil
 		}
 	case CloseModalMsg:
@@ -233,4 +234,14 @@ func (a App) View() tea.View {
 	v.AltScreen = true
 
 	return v
+}
+
+func (a *App) changeView(view Pane) {
+	a.focused = view
+	a.updateActive()
+}
+
+func (a *App) updateActive() {
+	a.reportsView.SetActive(a.focused == ReportsPane)
+	a.urlsView.SetActive(a.focused == UrlsPane)
 }
