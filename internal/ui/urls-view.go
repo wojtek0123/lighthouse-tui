@@ -208,8 +208,11 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 	return v, tea.Batch(cmds...)
 }
 
-func (v UrlsView) View() string {
-	return "\n" + v.list.View()
+func (v UrlsView) View(width, height int) string {
+	v.list.SetHeight(height)
+	v.list.SetWidth(width)
+
+	return v.list.View()
 }
 
 func (v UrlsView) SetLoading(cmd *runningCmd, index int, loading bool) {

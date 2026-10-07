@@ -47,7 +47,7 @@ func (d reportItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 	// 	spinner = d.spinner.View()
 	// }
 
-	str := fmt.Sprintf("%s", i.filename)
+	str := fmt.Sprintf("%d. %s", index+1, i.filename)
 
 	fn := d.styles.item.Render
 	if index == m.Index() && d.focus {
@@ -116,7 +116,9 @@ func (v ReportsView) Update(msg tea.Msg) (ReportsView, tea.Cmd) {
 	return v, tea.Batch(cmds...)
 }
 
-func (v ReportsView) View() string {
+func (v ReportsView) View(height int) string {
+	v.list.SetHeight(height)
+
 	return v.list.View()
 }
 

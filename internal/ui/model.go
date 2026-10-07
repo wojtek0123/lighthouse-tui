@@ -3,59 +3,59 @@ package ui
 import (
 	"context"
 	"net/url"
-	"strings"
+	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
 
-func renderPane(title, content string, width, height int, isActive bool) string {
-	borderColor := inactiveBorderColor
-	titleColor := inactiveTitleColor
-	if isActive {
-		borderColor = activeBorderColor
-		titleColor = activeTitleColor
-	}
-
-	border := lipgloss.RoundedBorder()
-	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
-
-	// 1. Style and render the title
-	titleStyle := lipgloss.NewStyle().
-		Foreground(titleColor).
-		Bold(isActive)
-	renderedTitle := titleStyle.Render(" " + title + " ")
-
-	// Format: ╭─ Title ────────────╮
-	titleLen := lipgloss.Width(renderedTitle)
-	topBarLength := width - titleLen - 2 // -2 for the ╭ and ╮ corners
-
-	topBarLength = max(topBarLength, 0)
-
-	leftDashCount := 1 // We want one dash before the title
-	rightDashCount := topBarLength - leftDashCount
-
-	rightDashCount = max(rightDashCount, 0)
-
-	topLeft := borderStyle.Render(border.TopLeft)
-	topRight := borderStyle.Render(border.TopRight)
-	horizLineLeft := borderStyle.Render(strings.Repeat(border.Top, leftDashCount))
-	horizLineRight := borderStyle.Render(strings.Repeat(border.Top, rightDashCount))
-
-	topBorder := topLeft + horizLineLeft + renderedTitle + horizLineRight + topRight
-
-	contentStyle := lipgloss.NewStyle().
-		Border(border).
-		BorderTop(false).
-		BorderForeground(borderColor).
-		Width(width).
-		Height(height - 1) // -1 because the manual top border takes up 1 line
-
-	renderedContent := contentStyle.Render(content)
-
-	return lipgloss.JoinVertical(lipgloss.Left, topBorder, renderedContent)
-}
+// func renderPane(title, content string, width, height int, isActive bool) string {
+// 	borderColor := inactiveBorderColor
+// 	titleColor := inactiveTitleColor
+// 	if isActive {
+// 		borderColor = activeBorderColor
+// 		titleColor = activeTitleColor
+// 	}
+//
+// 	border := lipgloss.RoundedBorder()
+// 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+//
+// 	// 1. Style and render the title
+// 	titleStyle := lipgloss.NewStyle().
+// 		Foreground(titleColor).
+// 		Bold(isActive)
+// 	renderedTitle := titleStyle.Render(" " + title + " ")
+//
+// 	// Format: ╭─ Title ────────────╮
+// 	titleLen := lipgloss.Width(renderedTitle)
+// 	topBarLength := width - titleLen - 2 // -2 for the ╭ and ╮ corners
+//
+// 	topBarLength = max(topBarLength, 0)
+//
+// 	leftDashCount := 1 // We want one dash before the title
+// 	rightDashCount := topBarLength - leftDashCount
+//
+// 	rightDashCount = max(rightDashCount, 0)
+//
+// 	topLeft := borderStyle.Render(border.TopLeft)
+// 	topRight := borderStyle.Render(border.TopRight)
+// 	horizLineLeft := borderStyle.Render(strings.Repeat(border.Top, leftDashCount))
+// 	horizLineRight := borderStyle.Render(strings.Repeat(border.Top, rightDashCount))
+//
+// 	topBorder := topLeft + horizLineLeft + renderedTitle + horizLineRight + topRight
+//
+// 	contentStyle := lipgloss.NewStyle().
+// 		Border(border).
+// 		BorderTop(false).
+// 		BorderForeground(borderColor).
+// 		Width(width).
+// 		Height(height - 1) // -1 because the manual top border takes up 1 line
+//
+// 	renderedContent := contentStyle.Render(content)
+//
+// 	return lipgloss.JoinVertical(lipgloss.Left, topBorder, renderedContent)
+// }
 
 type Pane int
 
@@ -232,14 +232,17 @@ func (m Model) View() tea.View {
 	} else if m.showModal {
 		v = m.modal.View(m.width, m.height)
 	} else {
-		asideWidth := m.width / 3
-		contentHeight := m.height - 2
+		asideWidth := min(m.width/3, 50)
+		hPanesCount := 2
+		bordersHeight := 2
 
-		urlsView := renderPane("[0] Urls", m.urlsView.View(), asideWidth, m.height/2, m.focused == UrlsPane)
-		reportsView := renderPane("[1] Reports", m.reportsView.View(), asideWidth, m.height/2, m.focused == ReportsPane)
-		resultView := renderPane("[2] Results", m.resultView.View(m.width-asideWidth, contentHeight), m.width-asideWidth, m.height, m.focused == ResultPane)
+		spareSpace := m.height - ((m.height / hPanesCount) * hPanesCount)
 
-		sidePanelView := lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView)
+		urlsView := Render("[0] Urls", m.urlsView.View(asideWidth, (m.height/hPanesCount)-bordersHeight), asideWidth, m.height/2, m.focused == UrlsPane)
+		reportsView := Render("[1] Reports", m.reportsView.View((m.height/hPanesCount)+spareSpace-bordersHeight), asideWidth, (m.height/2)+spareSpace, m.focused == ReportsPane)
+		resultView := Render(lipgloss.JoinHorizontal(lipgloss.Left, "Overview", " - ", "Performance", " ", strconv.Itoa(spareSpace)), m.resultView.View(m.width-asideWidth, m.height), m.width-asideWidth, m.height, m.focused == ResultPane)
+
+		sidePanelView := lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView))
 
 		v = tea.NewView(lipgloss.JoinHorizontal(lipgloss.Top, sidePanelView, resultView))
 	}

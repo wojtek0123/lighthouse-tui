@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strconv"
+	"strings"
 
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
@@ -102,4 +103,34 @@ func (r ResultView) View(width, height int) string {
 	} else {
 		return lipgloss.Place(width, height-2, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics")))
 	}
+}
+
+func Render(title, content string, width, height int, focus bool) string {
+	borderColor := inactiveBorderColor
+	// titleColor := inactiveTitleColor
+
+	if focus {
+		borderColor = activeBorderColor
+		// titleColor := lipgloss.Color(lipgloss.White)
+	}
+
+	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+	border := lipgloss.RoundedBorder()
+	renderedTitle := lipgloss.NewStyle().Padding(0, 1).Render(title)
+
+	leftDashCount := 3
+	corners := 2
+
+	spareSpace := width - lipgloss.Width(renderedTitle) - leftDashCount - corners
+
+	topLeftBorder := borderStyle.Render(border.TopLeft)
+	leftDash := strings.Repeat(borderStyle.Render(border.Top), leftDashCount)
+	rightDash := strings.Repeat(borderStyle.Render(border.Top), max(spareSpace, 5))
+	topRightBorder := borderStyle.Render(border.TopRight)
+
+	topBorder := topLeftBorder + leftDash + renderedTitle + rightDash + topRightBorder
+
+	body := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Width(width).Height(height - 1).BorderTop(false).BorderForeground(borderColor).Render(content)
+
+	return lipgloss.NewStyle().Width(width).Height(height - 1).Render(lipgloss.JoinVertical(lipgloss.Left, topBorder, body))
 }
