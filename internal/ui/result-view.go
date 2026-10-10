@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/table"
@@ -27,6 +26,9 @@ type ResultView struct {
 	table  table.Model
 	audits lighthouse.LighthouseReport
 	loaded bool
+
+	hostname   string
+	reportName string
 }
 
 func NewResultView() *ResultView {
@@ -45,9 +47,33 @@ func NewResultView() *ResultView {
 
 func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 	var cmd tea.Cmd
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+	case UrlSelectedMsg:
+		r.hostname = msg.hostname
+		r.reportName = ""
+		r.loaded = false
+	case ReportSelectedMsg:
+		if r.hostname != "" {
+			r.reportName = msg.reportName
+
+			report, err := lighthouse.GetReport(r.hostname, r.reportName)
+
+			if err != nil {
+				// return r, nil
+			} else {
+				r.audits = report
+				r.loaded = true
+			}
+
+		}
+	}
 
 	r.table, cmd = r.table.Update(msg)
-	return r, cmd
+	cmds = append(cmds, cmd)
+
+	return r, tea.Batch(cmds...)
 }
 
 func (r *ResultView) SetActiveTab(index int) {
@@ -107,4 +133,8 @@ func Render(header, content string, width, height int, focus bool) string {
 	body := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Width(width).Height(height - 1).BorderTop(false).BorderForeground(borderColor).Render(content)
 
 	return lipgloss.NewStyle().Width(width).Height(height - 1).Render(lipgloss.JoinVertical(lipgloss.Left, topBorder, body))
+}
+
+func (v *ResultView) SetHostname(hostname string) {
+	v.hostname = hostname
 }

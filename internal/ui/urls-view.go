@@ -14,8 +14,8 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
 
-type SelectedUrlMsg struct {
-	url string
+type UrlSelectedMsg struct {
+	hostname string
 }
 
 const listHeight = 14
@@ -148,6 +148,14 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case ActivePaneMsg:
+		if msg.pane != UrlsPane {
+			return v, nil
+		}
+
+		if selectedItem, ok := v.list.SelectedItem().(UrlItem); ok {
+			return v, selectUrl(selectedItem.hostname)
+		}
 	case spinner.TickMsg:
 
 		var cmd tea.Cmd
@@ -168,6 +176,7 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 
 			return v, restart(item.hostname, v.list.Index())
 		case "d":
+			// TODO: delete confirmation
 			i := v.list.Index()
 			v.list.RemoveItem(i)
 		case "c", "esc":
@@ -243,29 +252,15 @@ func (v UrlsView) IsLoading() bool {
 
 }
 
-// func (v UrlsView) StopLoading(index int) {
-// 	items := v.list.Items()
-//
-// 	i, ok := items[index].(UrlItem)
-//
-// 	if !ok {
-// 		return
-// 	}
-//
-// 	i.loading = !i.loading
-// 	i.cmd = nil
-// 	v.list.SetItem(index, i)
-// }
-
 func cancel(index int) tea.Cmd {
 	return func() tea.Msg {
 		return CancelMsg{Index: index}
 	}
 }
 
-func selectUrl(url string) tea.Cmd {
+func selectUrl(hostname string) tea.Cmd {
 	return func() tea.Msg {
-		return SelectedUrlMsg{url: url}
+		return UrlSelectedMsg{hostname: hostname}
 	}
 }
 

@@ -57,6 +57,10 @@ import (
 // 	return lipgloss.JoinVertical(lipgloss.Left, topBorder, renderedContent)
 // }
 
+type ActivePaneMsg struct {
+	pane Pane
+}
+
 type Pane int
 
 type Status int
@@ -106,7 +110,10 @@ func InitialModel() Model {
 	tabs := components.NewTabs()
 	tabs.SetTabs([]string{"Overview", "Performance"})
 
-	reportsView.GetReports(urls[0])
+	if len(urls) > 0 {
+		reportsView.GetReports(urls[0])
+		resultView.SetHostname(urls[0])
+	}
 
 	return Model{
 		urlsView:    urlsView,
@@ -123,7 +130,6 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// var cmd tea.Cmd
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -141,9 +147,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focused++
 			}
 
-			m.updateActive()
-
-			return m, nil
+			return m, m.setActivePane(m.focused)
 		case "shift+tab":
 			if m.focused == 0 {
 				m.focused = ResultPane
@@ -151,17 +155,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focused--
 			}
 
-			m.updateActive()
-			return m, nil
+			return m, m.setActivePane(m.focused)
 		case "0":
-			m.changeView(UrlsPane)
-			return m, nil
+			m.focused = UrlsPane
+			return m, m.setActivePane(UrlsPane)
 		case "1":
-			m.changeView(ReportsPane)
-			return m, nil
+			m.focused = ReportsPane
+			return m, m.setActivePane(ReportsPane)
 		case "2":
-			m.changeView(ResultPane)
-			return m, nil
+			m.focused = ResultPane
+			return m, m.setActivePane(ResultPane)
 		}
 	case CloseModalMsg:
 		m.showModal = false
@@ -227,6 +230,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		*m.reportsView = reportsView
 		cmds = append(cmds, cmd)
 
+		resultView, cmd := m.resultView.Update(msg)
+		*m.resultView = resultView
+		cmds = append(cmds, cmd)
+
 		tabs, cmd := m.tabs.Update(msg)
 		*m.tabs = tabs
 		cmds = append(cmds, cmd)
@@ -263,13 +270,14 @@ func (m Model) View() tea.View {
 	return v
 }
 
-func (m *Model) changeView(view Pane) {
-	m.focused = view
-	m.updateActive()
-}
-
-func (m *Model) updateActive() {
+func (m *Model) setActivePane(pane Pane) tea.Cmd {
 	m.reportsView.SetActive(m.focused == ReportsPane)
 	m.urlsView.SetActive(m.focused == UrlsPane)
 	m.tabs.SetFocus(m.focused == ResultPane)
+
+	return func() tea.Msg {
+		return ActivePaneMsg{
+			pane: pane,
+		}
+	}
 }

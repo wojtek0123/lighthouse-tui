@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const appName string = "lighthouse-tui"
+
 type Category string
 
 const (
@@ -113,8 +115,6 @@ func reportPath(text string, fileName string) (string, error) {
 
 	u, err := url.Parse(text)
 
-	appName := "lighthouse-tui"
-
 	base := filepath.Join(home, ".local", "share")
 	dir := filepath.Join(base, appName, "reports", u.Host)
 
@@ -131,8 +131,6 @@ func GetReports(url string) ([]string, error) {
 	if err != nil {
 		return make([]string, 0), err
 	}
-
-	appName := "lighthouse-tui"
 
 	base := filepath.Join(home, ".local", "share")
 	dir := filepath.Join(base, appName, "reports", url)
@@ -154,14 +152,31 @@ func GetReports(url string) ([]string, error) {
 	return fileNames, err
 }
 
+func GetReport(hostname, reportName string) (LighthouseReport, error) {
+	home, err := os.UserHomeDir()
+
+	if err != nil {
+		return LighthouseReport{}, err
+	}
+
+	base := filepath.Join(home, ".local", "share")
+	path := filepath.Join(base, appName, "reports", hostname, reportName)
+
+	output, err := os.ReadFile(path)
+
+	var report LighthouseReport
+
+	err = json.Unmarshal(output, &report)
+
+	return report, err
+}
+
 func GetUrls() ([]string, error) {
 	home, err := os.UserHomeDir()
 
 	if err != nil {
 		return make([]string, 0), err
 	}
-
-	appName := "lighthouse-tui"
 
 	base := filepath.Join(home, ".local", "share")
 	dir := filepath.Join(base, appName, "reports")

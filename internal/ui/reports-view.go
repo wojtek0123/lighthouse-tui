@@ -102,15 +102,34 @@ func (v ReportsView) Update(msg tea.Msg) (ReportsView, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
-	case SelectedUrlMsg:
-		v.GetReports(msg.url)
+	case ActivePaneMsg:
+		if msg.pane != ReportsPane {
+			return v, nil
+		}
+
+		if selectedItem, ok := v.list.SelectedItem().(ReportItem); ok {
+			return v, selectReport(selectedItem.filename)
+		}
+
+		return v, nil
+
+	case UrlSelectedMsg:
+		v.GetReports(msg.hostname)
 
 		return v, nil
 	}
 
+	previousIndex := v.list.Index()
+
 	if v.active {
 		v.list, cmd = v.list.Update(msg)
 		cmds = append(cmds, cmd)
+	}
+
+	if v.list.Index() != previousIndex {
+		if selectedItem, ok := v.list.SelectedItem().(ReportItem); ok {
+			cmds = append(cmds, selectReport(selectedItem.filename))
+		}
 	}
 
 	return v, tea.Batch(cmds...)
@@ -151,4 +170,16 @@ func (v *ReportsView) InsertReport(reportName string) tea.Cmd {
 func (v *ReportsView) SetActive(active bool) {
 	v.active = active
 	v.delegate.focus = active
+}
+
+type ReportSelectedMsg struct {
+	reportName string
+}
+
+func selectReport(reportName string) tea.Cmd {
+	return func() tea.Msg {
+		return ReportSelectedMsg{
+			reportName: reportName,
+		}
+	}
 }
