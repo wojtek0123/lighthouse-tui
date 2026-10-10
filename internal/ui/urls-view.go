@@ -176,7 +176,9 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 
 			return v, restart(item.hostname, v.list.Index())
 		case "d":
-			// TODO: delete confirmation
+			// TODO:
+			// [ ] delete confirmation
+			// [ ] remove all reports belongs to specific hostname
 			i := v.list.Index()
 			v.list.RemoveItem(i)
 		case "c", "esc":

@@ -256,6 +256,11 @@ func (m Model) View() tea.View {
 
 		spareSpace := m.height - ((m.height / hPanesCount) * hPanesCount)
 
+		// TODO:
+		// [ ] on wide screen 3 columns
+		// 	   smaller screen 2 columns, urls and reports stacked in one column
+		// 	   demand specific min size of terminal to correctly display app
+
 		urlsView := Render("[0] Urls", m.urlsView.View(asideWidth, (m.height/hPanesCount)-bordersHeight), asideWidth, m.height/2, m.focused == UrlsPane)
 		reportsView := Render("[1] Reports", m.reportsView.View((m.height/hPanesCount)+spareSpace-bordersHeight), asideWidth, (m.height/2)+spareSpace, m.focused == ReportsPane)
 		resultView := Render(lipgloss.JoinHorizontal(lipgloss.Left, m.tabs.View()), m.resultView.View(m.width-asideWidth, m.height), m.width-asideWidth, m.height, m.focused == ResultPane)
