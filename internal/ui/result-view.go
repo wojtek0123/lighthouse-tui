@@ -14,14 +14,14 @@ type Tab int
 
 const (
 	Overview Tab = iota
+	Performance
 )
 
 type ResultView struct {
-	Tabs       []string
-	TabContent []string
-	activeTab  Tab
+	activeTab Tab
 
-	overviewTab *OverviewTab
+	overviewTab    *OverviewTab
+	performanceTab *PerformanceTab
 
 	err    error
 	table  table.Model
@@ -32,12 +32,14 @@ type ResultView struct {
 func NewResultView() *ResultView {
 	t := table.New()
 	overviewTab := NewOverviewTab()
+	performanceTab := NewPerformanceTab()
 
 	return &ResultView{
-		loaded:      false,
-		table:       t,
-		overviewTab: overviewTab,
-		activeTab:   Overview,
+		loaded:         false,
+		table:          t,
+		overviewTab:    overviewTab,
+		activeTab:      Overview,
+		performanceTab: performanceTab,
 	}
 }
 
@@ -48,42 +50,12 @@ func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 	return r, cmd
 }
 
+func (r *ResultView) SetActiveTab(index int) {
+	r.activeTab = Tab(index)
+}
+
 func (r ResultView) View(width, height int) string {
 	if r.loaded {
-
-		fcp := r.audits.Audits["first-contentful-paint"]
-		lcp := r.audits.Audits["largest-contentful-paint"]
-		cls := r.audits.Audits["cumulative-layout-shift"]
-		tbt := r.audits.Audits["total-blocking-time"]
-		si := r.audits.Audits["speed-index"]
-
-		tableWidth := width - 10
-		columnWidth := tableWidth / 3
-
-		columns := []table.Column{
-			{Title: "Name", Width: columnWidth},
-			{Title: "Score", Width: columnWidth},
-			{Title: "Unit", Width: columnWidth},
-		}
-
-		rows := []table.Row{
-			{fcp.Title, strconv.FormatFloat(fcp.NumericValue, 'f', -1, 64), fcp.Unit},
-			{lcp.Title, strconv.FormatFloat(lcp.NumericValue, 'f', -1, 64), lcp.Unit},
-			{cls.Title, strconv.FormatFloat(cls.NumericValue, 'f', -1, 64), cls.Unit},
-			{tbt.Title, strconv.FormatFloat(tbt.NumericValue, 'f', -1, 64), tbt.Unit},
-			{si.Title, strconv.FormatFloat(si.NumericValue, 'f', -1, 64), si.Unit},
-		}
-
-		// s := table.DefaultStyles()
-		r.table.SetColumns(columns)
-		r.table.SetRows(rows)
-		r.table.SetWidth(tableWidth)
-		r.table.SetHeight(height / 2)
-		// r.table.SetStyles(s)
-
-		tabs := []string{"Overview", "Performance"}
-		tabsView := lipgloss.JoinHorizontal(lipgloss.Left, tabs...)
-
 		tab := ""
 
 		switch r.activeTab {
@@ -97,26 +69,28 @@ func (r ResultView) View(width, height int) string {
 			practises := categories[lighthouse.BestPractises].Score
 
 			tab = r.overviewTab.View(perf, accessibility, practises, seo, agentic, width)
+		case Performance:
+			tab = r.performanceTab.View()
 		}
 
-		return lipgloss.JoinVertical(lipgloss.Top, tabsView, "", tab)
+		return tab
 	} else {
 		return lipgloss.Place(width, height-2, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics")))
 	}
 }
 
-func Render(title, content string, width, height int, focus bool) string {
+func Render(header, content string, width, height int, focus bool) string {
 	borderColor := inactiveBorderColor
-	// titleColor := inactiveTitleColor
+	titleColor := inactiveTitleColor
 
 	if focus {
 		borderColor = activeBorderColor
-		// titleColor := lipgloss.Color(lipgloss.White)
+		titleColor = lipgloss.Color("170")
 	}
 
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
 	border := lipgloss.RoundedBorder()
-	renderedTitle := lipgloss.NewStyle().Padding(0, 1).Render(title)
+	renderedTitle := lipgloss.NewStyle().Padding(0, 1).Foreground(titleColor).Render(header)
 
 	leftDashCount := 3
 	corners := 2

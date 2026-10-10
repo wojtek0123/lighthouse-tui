@@ -3,11 +3,11 @@ package ui
 import (
 	"context"
 	"net/url"
-	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
+	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
 )
 
 // func renderPane(title, content string, width, height int, isActive bool) string {
@@ -79,6 +79,7 @@ type Model struct {
 	resultView  *ResultView
 	reportsView *ReportsView
 	modal       *UrlModal
+	tabs        *components.Tabs
 
 	showModal bool
 	focused   Pane
@@ -102,6 +103,8 @@ func InitialModel() Model {
 	resultView := NewResultView()
 	reportsView := NewReportsView(false)
 	modal := NewUrlModal()
+	tabs := components.NewTabs()
+	tabs.SetTabs([]string{"Overview", "Performance"})
 
 	reportsView.GetReports(urls[0])
 
@@ -111,6 +114,7 @@ func InitialModel() Model {
 		reportsView: reportsView,
 		focused:     UrlsPane,
 		modal:       modal,
+		tabs:        tabs,
 	}
 }
 
@@ -119,7 +123,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
+	// var cmd tea.Cmd
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -201,23 +205,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, tea.Batch(cmds...)
+	case components.ActiveTabMsg:
+		m.resultView.SetActiveTab(msg.Index)
 
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 	}
 
-	urlsView, cmd := m.urlsView.Update(msg)
-	*m.urlsView = urlsView
-	cmds = append(cmds, cmd)
-
-	reportsView, cmd := m.reportsView.Update(msg)
-	*m.reportsView = reportsView
-	cmds = append(cmds, cmd)
-
 	if m.showModal {
 		modal, cmd := m.modal.Update(msg)
 		*m.modal = modal
+		cmds = append(cmds, cmd)
+	} else {
+		urlsView, cmd := m.urlsView.Update(msg)
+		*m.urlsView = urlsView
+		cmds = append(cmds, cmd)
+
+		reportsView, cmd := m.reportsView.Update(msg)
+		*m.reportsView = reportsView
+		cmds = append(cmds, cmd)
+
+		tabs, cmd := m.tabs.Update(msg)
+		*m.tabs = tabs
 		cmds = append(cmds, cmd)
 	}
 
@@ -240,7 +251,7 @@ func (m Model) View() tea.View {
 
 		urlsView := Render("[0] Urls", m.urlsView.View(asideWidth, (m.height/hPanesCount)-bordersHeight), asideWidth, m.height/2, m.focused == UrlsPane)
 		reportsView := Render("[1] Reports", m.reportsView.View((m.height/hPanesCount)+spareSpace-bordersHeight), asideWidth, (m.height/2)+spareSpace, m.focused == ReportsPane)
-		resultView := Render(lipgloss.JoinHorizontal(lipgloss.Left, "Overview", " - ", "Performance", " ", strconv.Itoa(spareSpace)), m.resultView.View(m.width-asideWidth, m.height), m.width-asideWidth, m.height, m.focused == ResultPane)
+		resultView := Render(lipgloss.JoinHorizontal(lipgloss.Left, m.tabs.View()), m.resultView.View(m.width-asideWidth, m.height), m.width-asideWidth, m.height, m.focused == ResultPane)
 
 		sidePanelView := lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView))
 
@@ -260,4 +271,5 @@ func (m *Model) changeView(view Pane) {
 func (m *Model) updateActive() {
 	m.reportsView.SetActive(m.focused == ReportsPane)
 	m.urlsView.SetActive(m.focused == UrlsPane)
+	m.tabs.SetFocus(m.focused == ResultPane)
 }
