@@ -171,7 +171,7 @@ func GetReport(hostname, reportName string) (LighthouseReport, error) {
 	return report, err
 }
 
-func GetUrls() ([]string, error) {
+func GetHostnames() ([]string, error) {
 	home, err := os.UserHomeDir()
 
 	if err != nil {
@@ -187,13 +187,28 @@ func GetUrls() ([]string, error) {
 		return make([]string, 0), err
 	}
 
-	urls := []string{}
+	hostnames := []string{}
 
 	for _, entry := range entries {
 		if entry.IsDir() == true {
-			urls = append(urls, entry.Name())
+			hostnames = append(hostnames, entry.Name())
 		}
 	}
 
-	return urls, err
+	return hostnames, err
+}
+
+func RemoveHostname(hostname string) error {
+	home, err := os.UserHomeDir()
+
+	if err != nil {
+		return err
+	}
+
+	base := filepath.Join(home, ".local", "share")
+	path := filepath.Join(base, appName, "reports", hostname)
+
+	err = os.RemoveAll(path)
+
+	return err
 }

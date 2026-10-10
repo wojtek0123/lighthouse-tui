@@ -95,7 +95,7 @@ type Model struct {
 }
 
 func InitialModel() Model {
-	urls, err := lighthouse.GetUrls()
+	urls, err := lighthouse.GetHostnames()
 
 	if err != nil {
 		return Model{

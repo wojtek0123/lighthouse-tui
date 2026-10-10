@@ -107,7 +107,7 @@ type UrlsView struct {
 }
 
 func NewUrlsView(active bool) *UrlsView {
-	urls, err := lighthouse.GetUrls()
+	urls, err := lighthouse.GetHostnames()
 
 	if err != nil {
 	}
@@ -178,9 +178,19 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 		case "d":
 			// TODO:
 			// [ ] delete confirmation
-			// [ ] remove all reports belongs to specific hostname
-			i := v.list.Index()
-			v.list.RemoveItem(i)
+			if selectedItem, ok := v.list.SelectedItem().(UrlItem); ok {
+
+				err := lighthouse.RemoveHostname(selectedItem.hostname)
+
+				if err != nil {
+					return v, nil
+				}
+
+				i := v.list.Index()
+				v.list.RemoveItem(i)
+
+				return v, nil
+			}
 		case "c", "esc":
 			item, ok := v.list.SelectedItem().(UrlItem)
 

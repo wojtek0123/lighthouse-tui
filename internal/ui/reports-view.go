@@ -60,7 +60,7 @@ func (d reportItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 }
 
 func NewReportsView(active bool) *ReportsView {
-	urls, err := lighthouse.GetUrls()
+	urls, err := lighthouse.GetHostnames()
 
 	if err != nil {
 	}
