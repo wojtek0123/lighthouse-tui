@@ -49,6 +49,10 @@ type CancelMsg struct {
 	Index int
 }
 
+type DeleteHostnameMsg struct {
+	hostname string
+}
+
 func restart(url string, index int) tea.Cmd {
 	return func() tea.Msg {
 		return RestartMsg{Url: url, Index: index}
@@ -189,6 +193,8 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 				i := v.list.Index()
 				v.list.RemoveItem(i)
 
+				return v, deleteHostname(selectedItem.hostname)
+			} else {
 				return v, nil
 			}
 		case "c", "esc":
@@ -329,4 +335,12 @@ func StopLoading(l *list.Model, text string) tea.Cmd {
 func (v *UrlsView) SetActive(active bool) {
 	v.active = active
 	v.delegate.focus = active
+}
+
+func deleteHostname(hostname string) tea.Cmd {
+	return func() tea.Msg {
+		return DeleteHostnameMsg{
+			hostname: hostname,
+		}
+	}
 }

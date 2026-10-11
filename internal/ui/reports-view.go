@@ -113,6 +113,9 @@ func (v ReportsView) Update(msg tea.Msg) (ReportsView, tea.Cmd) {
 
 		return v, nil
 
+	case DeleteHostnameMsg:
+		v.list.SetItems([]list.Item{})
+		return v, nil
 	case UrlSelectedMsg:
 		v.GetReports(msg.hostname)
 
