@@ -250,22 +250,32 @@ func (m Model) View() tea.View {
 	} else if m.showModal {
 		v = m.modal.View(m.width, m.height)
 	} else {
-		asideWidth := min(m.width/3, 50)
-		hPanesCount := 2
 		bordersHeight := 2
+		sidePanelView := ""
+		resultView := ""
 
-		spareSpace := m.height - ((m.height / hPanesCount) * hPanesCount)
+		if m.width > 150 {
+			asideWidth := min(m.width/5, 50)
 
-		// TODO:
-		// [ ] on wide screen 3 columns
-		// 	   smaller screen 2 columns, urls and reports stacked in one column
-		// 	   demand specific min size of terminal to correctly display app
+			urlsView := Render("[0] Urls", m.urlsView.View(asideWidth, m.height-bordersHeight), asideWidth, m.height, m.focused == UrlsPane)
+			reportsView := Render("[1] Reports", m.reportsView.View(m.height-bordersHeight), asideWidth, m.height, m.focused == ReportsPane)
 
-		urlsView := Render("[0] Urls", m.urlsView.View(asideWidth, (m.height/hPanesCount)-bordersHeight), asideWidth, m.height/2, m.focused == UrlsPane)
-		reportsView := Render("[1] Reports", m.reportsView.View((m.height/hPanesCount)+spareSpace-bordersHeight), asideWidth, (m.height/2)+spareSpace, m.focused == ReportsPane)
-		resultView := Render(lipgloss.JoinHorizontal(lipgloss.Left, m.tabs.View()), m.resultView.View(m.width-asideWidth, m.height), m.width-asideWidth, m.height, m.focused == ResultPane)
+			sidePanelView = lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinHorizontal(lipgloss.Left, urlsView, reportsView))
 
-		sidePanelView := lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView))
+			resultView = Render(lipgloss.JoinHorizontal(lipgloss.Left, m.tabs.View()), m.resultView.View(m.width-asideWidth*2, m.height), m.width-asideWidth*2, m.height, m.focused == ResultPane)
+		} else {
+			asideWidth := min(m.width/3, 50)
+			hPanesCount := 2
+
+			spareSpace := m.height - ((m.height / hPanesCount) * hPanesCount)
+
+			urlsView := Render("[0] Urls", m.urlsView.View(asideWidth, (m.height/hPanesCount)-bordersHeight), asideWidth, m.height/2, m.focused == UrlsPane)
+			reportsView := Render("[1] Reports", m.reportsView.View((m.height/hPanesCount)+spareSpace-bordersHeight), asideWidth, (m.height/2)+spareSpace, m.focused == ReportsPane)
+
+			sidePanelView = lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView))
+
+			resultView = Render(lipgloss.JoinHorizontal(lipgloss.Left, m.tabs.View()), m.resultView.View(m.width-asideWidth, m.height), m.width-asideWidth, m.height, m.focused == ResultPane)
+		}
 
 		v = tea.NewView(lipgloss.JoinHorizontal(lipgloss.Top, sidePanelView, resultView))
 	}
