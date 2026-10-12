@@ -23,6 +23,7 @@ const listHeight = 14
 type styles struct {
 	title        lipgloss.Style
 	item         lipgloss.Style
+	focus        lipgloss.Style
 	selectedItem lipgloss.Style
 	pagination   lipgloss.Style
 	help         lipgloss.Style
@@ -33,7 +34,8 @@ func newStyles(darkBG bool) styles {
 	var s styles
 	s.title = lipgloss.NewStyle().MarginLeft(2)
 	s.item = lipgloss.NewStyle().PaddingLeft(1)
-	s.selectedItem = lipgloss.NewStyle().PaddingLeft(1).Background(lipgloss.Color("60")).Width(58)
+	s.focus = lipgloss.NewStyle()
+	s.selectedItem = lipgloss.NewStyle().PaddingLeft(1).Background(lipgloss.Color("60"))
 	s.pagination = list.DefaultStyles(darkBG).PaginationStyle.PaddingLeft(4)
 	s.help = list.DefaultStyles(darkBG).HelpStyle.PaddingLeft(4).PaddingBottom(1)
 	s.quitText = lipgloss.NewStyle().Margin(1, 0, 2, 4)
@@ -96,6 +98,10 @@ func (d urlItemDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 	if index == m.Index() && d.focus {
 		fn = func(s ...string) string {
 			return d.styles.selectedItem.Render(strings.Join(s, " "))
+		}
+	} else if index == m.Index() {
+		fn = func(s ...string) string {
+			return d.styles.focus.Render(lipgloss.JoinHorizontal(lipgloss.Left, ">", strings.Join(s, " ")))
 		}
 	}
 

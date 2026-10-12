@@ -83,7 +83,6 @@ type Model struct {
 	resultView  *ResultView
 	reportsView *ReportsView
 	modal       *UrlModal
-	tabs        *components.Tabs
 
 	showModal bool
 	focused   Pane
@@ -107,8 +106,6 @@ func InitialModel() Model {
 	resultView := NewResultView()
 	reportsView := NewReportsView(false)
 	modal := NewUrlModal()
-	tabs := components.NewTabs()
-	tabs.SetTabs([]string{"Overview", "Performance"})
 
 	if len(urls) > 0 {
 		reportsView.GetReports(urls[0])
@@ -121,7 +118,6 @@ func InitialModel() Model {
 		reportsView: reportsView,
 		focused:     UrlsPane,
 		modal:       modal,
-		tabs:        tabs,
 	}
 }
 
@@ -130,6 +126,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -218,24 +215,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.showModal {
-		modal, cmd := m.modal.Update(msg)
-		*m.modal = modal
+		*m.modal, cmd = m.modal.Update(msg)
 		cmds = append(cmds, cmd)
 	} else {
-		urlsView, cmd := m.urlsView.Update(msg)
-		*m.urlsView = urlsView
+		*m.urlsView, cmd = m.urlsView.Update(msg)
 		cmds = append(cmds, cmd)
 
-		reportsView, cmd := m.reportsView.Update(msg)
-		*m.reportsView = reportsView
+		*m.reportsView, cmd = m.reportsView.Update(msg)
 		cmds = append(cmds, cmd)
 
-		resultView, cmd := m.resultView.Update(msg)
-		*m.resultView = resultView
-		cmds = append(cmds, cmd)
-
-		tabs, cmd := m.tabs.Update(msg)
-		*m.tabs = tabs
+		*m.resultView, cmd = m.resultView.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 
@@ -257,24 +246,23 @@ func (m Model) View() tea.View {
 		if m.width > 150 {
 			asideWidth := min(m.width/5, 50)
 
-			urlsView := Render("[0] Urls", m.urlsView.View(asideWidth, m.height-bordersHeight), asideWidth, m.height, m.focused == UrlsPane)
-			reportsView := Render("[1] Reports", m.reportsView.View(m.height-bordersHeight), asideWidth, m.height, m.focused == ReportsPane)
+			urlsView := RenderPane("[0] Urls", m.urlsView.View(asideWidth, m.height-bordersHeight), asideWidth, m.height, m.focused == UrlsPane)
+			reportsView := RenderPane("[1] Reports", m.reportsView.View(m.height-bordersHeight), asideWidth, m.height, m.focused == ReportsPane)
 
 			sidePanelView = lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinHorizontal(lipgloss.Left, urlsView, reportsView))
 
-			resultView = Render(lipgloss.JoinHorizontal(lipgloss.Left, m.tabs.View()), m.resultView.View(m.width-asideWidth*2, m.height), m.width-asideWidth*2, m.height, m.focused == ResultPane)
+			resultView = RenderPane("[2] Result", m.resultView.View(m.width-asideWidth*2, m.height), m.width-asideWidth*2, m.height, m.focused == ResultPane)
 		} else {
 			asideWidth := min(m.width/3, 50)
 			hPanesCount := 2
 
 			spareSpace := m.height - ((m.height / hPanesCount) * hPanesCount)
 
-			urlsView := Render("[0] Urls", m.urlsView.View(asideWidth, (m.height/hPanesCount)-bordersHeight), asideWidth, m.height/2, m.focused == UrlsPane)
-			reportsView := Render("[1] Reports", m.reportsView.View((m.height/hPanesCount)+spareSpace-bordersHeight), asideWidth, (m.height/2)+spareSpace, m.focused == ReportsPane)
+			urlsView := RenderPane("[0] Urls", m.urlsView.View(asideWidth, (m.height/hPanesCount)-bordersHeight), asideWidth, m.height/2, m.focused == UrlsPane)
+			reportsView := RenderPane("[1] Reports", m.reportsView.View((m.height/hPanesCount)+spareSpace-bordersHeight), asideWidth, (m.height/2)+spareSpace, m.focused == ReportsPane)
 
 			sidePanelView = lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView))
-
-			resultView = Render(lipgloss.JoinHorizontal(lipgloss.Left, m.tabs.View()), m.resultView.View(m.width-asideWidth, m.height), m.width-asideWidth, m.height, m.focused == ResultPane)
+			resultView = RenderPane("[2] Result", m.resultView.View(m.width-asideWidth, m.height), m.width-asideWidth, m.height, m.focused == ResultPane)
 		}
 
 		v = tea.NewView(lipgloss.JoinHorizontal(lipgloss.Top, sidePanelView, resultView))
@@ -288,7 +276,6 @@ func (m Model) View() tea.View {
 func (m *Model) setActivePane(pane Pane) tea.Cmd {
 	m.reportsView.SetActive(m.focused == ReportsPane)
 	m.urlsView.SetActive(m.focused == UrlsPane)
-	m.tabs.SetFocus(m.focused == ResultPane)
 
 	return func() tea.Msg {
 		return ActivePaneMsg{

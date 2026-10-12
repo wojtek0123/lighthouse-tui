@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
+	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
 )
 
 type Tab int
@@ -18,6 +19,7 @@ const (
 
 type ResultView struct {
 	activeTab Tab
+	active    bool
 
 	overviewTab    *OverviewTab
 	performanceTab *PerformanceTab
@@ -29,12 +31,16 @@ type ResultView struct {
 
 	hostname   string
 	reportName string
+
+	tabs *components.Tabs
 }
 
 func NewResultView() *ResultView {
 	t := table.New()
 	overviewTab := NewOverviewTab()
 	performanceTab := NewPerformanceTab()
+	tabs := components.NewTabs()
+	tabs.SetTabs([]string{"Overview", "Performance"})
 
 	return &ResultView{
 		loaded:         false,
@@ -42,6 +48,7 @@ func NewResultView() *ResultView {
 		overviewTab:    overviewTab,
 		activeTab:      Overview,
 		performanceTab: performanceTab,
+		tabs:           tabs,
 	}
 }
 
@@ -50,6 +57,12 @@ func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case ActivePaneMsg:
+		active := msg.pane == ResultPane
+
+		r.tabs.SetFocus(active)
+		r.active = active
+		return r, nil
 	case UrlSelectedMsg:
 		r.hostname = msg.hostname
 		r.reportName = ""
@@ -70,8 +83,13 @@ func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 		}
 	}
 
-	r.table, cmd = r.table.Update(msg)
-	cmds = append(cmds, cmd)
+	if r.active {
+		r.table, cmd = r.table.Update(msg)
+		cmds = append(cmds, cmd)
+
+		*r.tabs, cmd = r.tabs.Update(msg)
+		cmds = append(cmds, cmd)
+	}
 
 	return r, tea.Batch(cmds...)
 }
@@ -99,13 +117,13 @@ func (r ResultView) View(width, height int) string {
 			tab = r.performanceTab.View()
 		}
 
-		return tab
+		return lipgloss.NewStyle().Padding(0, 1).Render(lipgloss.JoinVertical(lipgloss.Top, r.tabs.View(), " ", tab))
 	} else {
 		return lipgloss.Place(width, height-2, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics")))
 	}
 }
 
-func Render(header, content string, width, height int, focus bool) string {
+func RenderPane(header, content string, width, height int, focus bool) string {
 	borderColor := inactiveBorderColor
 	titleColor := inactiveTitleColor
 

@@ -115,6 +115,7 @@ func reportPath(text string, fileName string) (string, error) {
 
 	u, err := url.Parse(text)
 
+	// [ ] Handle other os
 	base := filepath.Join(home, ".local", "share")
 	dir := filepath.Join(base, appName, "reports", u.Host)
 

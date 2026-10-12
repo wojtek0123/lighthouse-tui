@@ -41,8 +41,7 @@ func (t Tabs) Update(msg tea.Msg) (Tabs, tea.Cmd) {
 
 func (t Tabs) View() string {
 	inactiveStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	activeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("62"))
-	activeTabStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
+	activeTabStyle := lipgloss.NewStyle().Bold(false).Foreground(lipgloss.Color("212"))
 
 	tabs := []string{}
 
@@ -54,13 +53,7 @@ func (t Tabs) View() string {
 		}
 	}
 
-	sep := inactiveStyle.Render(" - ")
-
-	if t.focus {
-		sep = activeStyle.Render(" - ")
-	}
-
-	return lipgloss.JoinHorizontal(lipgloss.Left, strings.Join(tabs, sep))
+	return lipgloss.JoinHorizontal(lipgloss.Left, strings.Join(tabs, " "))
 }
 
 func (t *Tabs) SetTabs(tabs []string) {

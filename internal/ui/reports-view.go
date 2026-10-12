@@ -7,6 +7,7 @@ import (
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
 
@@ -31,6 +32,8 @@ func (i ReportItem) FilterValue() string { return i.filename }
 type reportItemDelegate struct {
 	styles styles
 	focus  bool
+
+	resultActive bool
 }
 
 func (d reportItemDelegate) Height() int                                  { return 1 }
@@ -53,6 +56,10 @@ func (d reportItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 	if index == m.Index() && d.focus {
 		fn = func(s ...string) string {
 			return d.styles.selectedItem.Render(strings.Join(s, " "))
+		}
+	} else if index == m.Index() && d.resultActive {
+		fn = func(s ...string) string {
+			return lipgloss.JoinHorizontal(lipgloss.Left, ">", strings.Join(s, " "))
 		}
 	}
 
@@ -103,6 +110,8 @@ func (v ReportsView) Update(msg tea.Msg) (ReportsView, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case ActivePaneMsg:
+		v.setResultPaneActive(msg.pane == ResultPane)
+
 		if msg.pane != ReportsPane {
 			return v, nil
 		}
@@ -185,4 +194,8 @@ func selectReport(reportName string) tea.Cmd {
 			reportName: reportName,
 		}
 	}
+}
+
+func (v *ReportsView) setResultPaneActive(active bool) {
+	v.delegate.resultActive = active
 }
