@@ -9,6 +9,29 @@ on:
       - main
 
 jobs:
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Build binary
+        run: go build -o lighthouse-tui ./cmd/lighthouse-tui
+
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -17,7 +40,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: 1.26.x
+          go-version-file: 'go.mod'
           cache: true
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
@@ -25,14 +48,44 @@ jobs:
           version: latest
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: 1.26.x
+          go-version-file: 'go.mod'
           cache: true
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.out ./...
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Run Gosec
+        uses: securego/gosec@master
+        with:
+          # Exclude rules:
+          # G104: Errors unhandled - Goja Set() returns error only for invalid types, safe with hardcoded keys
+          #       Note: inline #nosec doesn't work for multi-line function calls in Goja bindings
+          # G301: Directory permissions 0755 - acceptable for user config directories
+          # G304: File inclusion via variable - necessary for config/collection loading
+          # G306: WriteFile permissions 0644 - acceptable for user config files
+          # G404: math/rand is fine for non-crypto purposes (random IDs, test data)
+          # args: -exclude=G104,G301,G304,G306,G404 -exclude-dir=testdata ./...
+          args: -exclude-dir=testdata ./...
