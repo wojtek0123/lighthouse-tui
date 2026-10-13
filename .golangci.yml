@@ -32,10 +32,6 @@ linters:
     - whitespace
     - wrapcheck
 
-linters-settings:
-  exhaustive:
-    default-signifies-exhaustive: true
-
 formatters:
   settings:
     goimports:
