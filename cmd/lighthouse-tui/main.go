@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	tea "charm.land/bubbletea/v2"
@@ -12,11 +13,14 @@ func main() {
 	f, err := tea.LogToFile("debug.log", "debug")
 
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		log.Fatalf("fatal error opening log file: %v", err)
 	}
 
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			log.Printf("error closing log file: %v", closeErr)
+		}
+	}()
 
 	p := tea.NewProgram(ui.InitialModel())
 

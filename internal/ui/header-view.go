@@ -21,8 +21,8 @@ import (
 var (
 	activeBorderColor   = lipgloss.Color("62")  // Indigo/Purple
 	inactiveBorderColor = lipgloss.Color("240") // Dark Gray
-	activeTitleColor    = lipgloss.Color("212") // Pink
-	inactiveTitleColor  = lipgloss.Color("240") // Dark Gray
+	// activeTitleColor    = lipgloss.Color("212") // Pink
+	inactiveTitleColor = lipgloss.Color("240") // Dark Gray
 )
 
 type runningCmd struct {
@@ -66,7 +66,7 @@ func (h HeaderView) Update(msg tea.Msg) (HeaderView, tea.Cmd) {
 	case spinner.TickMsg:
 		h.spinner, cmd = h.spinner.Update(msg)
 
-		if h.loading == false {
+		if !h.loading {
 			return h, nil
 		}
 
@@ -77,7 +77,7 @@ func (h HeaderView) Update(msg tea.Msg) (HeaderView, tea.Cmd) {
 }
 
 func (h HeaderView) View() tea.View {
-	if h.loading == true {
+	if h.loading {
 		return tea.NewView(lipgloss.JoinHorizontal(lipgloss.Left, h.enteredUrl, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).MarginLeft(1).MarginRight(1).Render("Loading..."), h.spinner.View()))
 	} else {
 		if h.enteredUrl == "" {

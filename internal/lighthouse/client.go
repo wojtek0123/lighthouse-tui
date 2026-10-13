@@ -89,7 +89,15 @@ func RunLighthouse(ctx context.Context, target string) (LighthouseResult, error)
 	var report LighthouseReport
 	err = json.Unmarshal(output, &report)
 
+	if err != nil {
+		return LighthouseResult{}, err
+	}
+
 	err = os.WriteFile(path, output, 0o644)
+
+	if err != nil {
+		return LighthouseResult{}, err
+	}
 
 	return LighthouseResult{
 		Report:     report,
@@ -114,6 +122,10 @@ func reportPath(text string, fileName string) (string, error) {
 	}
 
 	u, err := url.Parse(text)
+
+	if err != nil {
+		return "", err
+	}
 
 	// [ ] Handle other os
 	base := filepath.Join(home, ".local", "share")
@@ -145,7 +157,7 @@ func GetReports(url string) ([]string, error) {
 	fileNames := []string{}
 
 	for _, entry := range entries {
-		if entry.IsDir() == false {
+		if !entry.IsDir() {
 			fileNames = append(fileNames, entry.Name())
 		}
 	}
@@ -164,6 +176,10 @@ func GetReport(hostname, reportName string) (LighthouseReport, error) {
 	path := filepath.Join(base, appName, "reports", hostname, reportName)
 
 	output, err := os.ReadFile(path)
+
+	if err != nil {
+		return LighthouseReport{}, err
+	}
 
 	var report LighthouseReport
 
@@ -191,7 +207,7 @@ func GetHostnames() ([]string, error) {
 	hostnames := []string{}
 
 	for _, entry := range entries {
-		if entry.IsDir() == true {
+		if entry.IsDir() {
 			hostnames = append(hostnames, entry.Name())
 		}
 	}

@@ -8,7 +8,6 @@ import (
 type LighthouseMsg struct {
 	url    string
 	result lighthouse.LighthouseResult
-	report string
 	err    error
 }
 

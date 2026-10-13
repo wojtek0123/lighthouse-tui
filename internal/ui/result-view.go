@@ -74,7 +74,7 @@ func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 			report, err := lighthouse.GetReport(r.hostname, r.reportName)
 
 			if err != nil {
-				// return r, nil
+				r.err = err
 			} else {
 				r.audits = report
 				r.loaded = true

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"strings"
 
@@ -83,12 +84,12 @@ func (d urlItemDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 	i, ok := listItem.(UrlItem)
 
 	if !ok {
-		return
+		log.Printf("error while asserting url item type")
 	}
 
 	spinner := ""
 
-	if i.loading == true {
+	if i.loading {
 		spinner = d.spinner.View()
 	}
 
@@ -105,7 +106,9 @@ func (d urlItemDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 		}
 	}
 
-	fmt.Fprint(w, fn(str))
+	if _, err := fmt.Fprint(w, fn(str)); err != nil {
+		log.Printf("error rendering url list item: %v", err)
+	}
 }
 
 type UrlsView struct {
@@ -116,11 +119,15 @@ type UrlsView struct {
 	active bool
 }
 
+// should it return (*UrlsView, error)?
 func NewUrlsView(active bool) *UrlsView {
 	urls, err := lighthouse.GetHostnames()
 
 	if err != nil {
+		log.Printf("error getting local hostnames: %v", err)
+		return nil
 	}
+
 	items := []list.Item{}
 
 	for _, url := range urls {
@@ -267,19 +274,13 @@ func (v UrlsView) IsLoading() bool {
 	for _, item := range items {
 		i := item.(UrlItem)
 
-		if i.loading == true {
+		if i.loading {
 			return true
 		}
 	}
 
 	return false
 
-}
-
-func cancel(index int) tea.Cmd {
-	return func() tea.Msg {
-		return CancelMsg{Index: index}
-	}
 }
 
 func selectUrl(hostname string) tea.Cmd {

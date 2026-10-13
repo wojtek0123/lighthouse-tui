@@ -106,7 +106,7 @@ func (m UrlModal) View(width, height int) tea.View {
 
 	errorMsg := ""
 
-	if m.hasError == true {
+	if m.hasError {
 		errorMsg = errMsgStyle.Render(m.err.Error())
 	}
 

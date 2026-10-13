@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
+	"log"
 	"strings"
 
 	"charm.land/bubbles/v2/list"
@@ -11,9 +12,7 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
 
-type ReportMsg struct {
-	reports []string
-}
+// type ReportMsg struct{}
 
 type ReportItem struct {
 	filename string
@@ -23,8 +22,8 @@ type ReportsView struct {
 	list     list.Model
 	delegate *reportItemDelegate
 
-	url    string
-	active bool
+	hostname string
+	active   bool
 }
 
 func (i ReportItem) FilterValue() string { return i.filename }
@@ -43,12 +42,9 @@ func (d reportItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 	i, ok := listItem.(ReportItem)
 
 	if !ok {
+		log.Printf("error while asserting report item type")
 		return
 	}
-
-	// if i.loading == true {
-	// 	spinner = d.spinner.View()
-	// }
 
 	str := fmt.Sprintf("%d. %s", index+1, i.filename)
 
@@ -63,18 +59,24 @@ func (d reportItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 		}
 	}
 
-	fmt.Fprint(w, fn(str))
+	if _, err := fmt.Fprint(w, fn(str)); err != nil {
+		log.Printf("error rendering url list item: %v", err)
+	}
+
 }
 
+// it should return (*ReportsView, error)
 func NewReportsView(active bool) *ReportsView {
 	urls, err := lighthouse.GetHostnames()
 
 	if err != nil {
+		return &ReportsView{}
 	}
 
 	reports, err := lighthouse.GetReports(urls[0])
 
 	if err != nil {
+		return &ReportsView{}
 	}
 
 	items := []list.Item{}
@@ -98,7 +100,7 @@ func NewReportsView(active bool) *ReportsView {
 
 	return &ReportsView{
 		list:     list,
-		url:      urls[0],
+		hostname: urls[0],
 		delegate: delegate,
 		active:   active,
 	}
@@ -153,10 +155,12 @@ func (v ReportsView) View(height int) string {
 	return v.list.View()
 }
 
-func (v *ReportsView) GetReports(url string) {
-	reports, err := lighthouse.GetReports(url)
+func (v *ReportsView) GetReports(hostname string) {
+	reports, err := lighthouse.GetReports(hostname)
 
 	if err != nil {
+		log.Printf("error getting reports from hostname: %v", err)
+		return
 	}
 
 	items := []list.Item{}
@@ -167,7 +171,7 @@ func (v *ReportsView) GetReports(url string) {
 
 	v.list.SetItems(items)
 	v.list.ResetSelected()
-	v.url = url
+	v.hostname = hostname
 }
 
 func (v *ReportsView) InsertReport(reportName string) tea.Cmd {
