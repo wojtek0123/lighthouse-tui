@@ -57,32 +57,26 @@ import (
 // 	return lipgloss.JoinVertical(lipgloss.Left, topBorder, renderedContent)
 // }
 
+// ActivePaneMsg is a Bubble Tea message dispatched when active pane changed.
 type ActivePaneMsg struct {
 	pane Pane
 }
 
+// Pane indicates active pane.
 type Pane int
 
-type Status int
-
 const (
-	Idle Status = iota
-	Loading
-	Error
-	Loaded
+	hostnamesPane Pane = iota
+	reportsPane
+	resultPane
 )
 
-const (
-	UrlsPane Pane = iota
-	ReportsPane
-	ResultPane
-)
-
+// Model represents app main type.
 type Model struct {
-	urlsView    *UrlsView
+	urlsView    *HostnamesView
 	resultView  *ResultView
 	reportsView *ReportsView
-	modal       *UrlModal
+	modal       *URLModal
 
 	showModal bool
 	focused   Pane
@@ -93,6 +87,7 @@ type Model struct {
 	error error
 }
 
+// InitialModel creates initial state of the app.
 func InitialModel() Model {
 	urls, err := lighthouse.GetHostnames()
 
@@ -102,10 +97,10 @@ func InitialModel() Model {
 		}
 	}
 
-	urlsView := NewUrlsView(true)
+	urlsView := newHostnamesView(true)
 	resultView := NewResultView()
 	reportsView := NewReportsView(false)
-	modal := NewUrlModal()
+	modal := NewURLModal()
 
 	if len(urls) > 0 {
 		reportsView.GetReports(urls[0])
@@ -116,15 +111,17 @@ func InitialModel() Model {
 		urlsView:    urlsView,
 		resultView:  resultView,
 		reportsView: reportsView,
-		focused:     UrlsPane,
+		focused:     hostnamesPane,
 		modal:       modal,
 	}
 }
 
+// Init returns tea.Cmd to keep up to date others views.
 func (m Model) Init() tea.Cmd {
 	return nil
 }
 
+// Update is running in loop to keep state up to date.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
@@ -139,7 +136,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "tab":
 			if m.focused == 2 {
-				m.focused = UrlsPane
+				m.focused = hostnamesPane
 			} else {
 				m.focused++
 			}
@@ -147,43 +144,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.setActivePane(m.focused)
 		case "shift+tab":
 			if m.focused == 0 {
-				m.focused = ResultPane
+				m.focused = resultPane
 			} else {
 				m.focused--
 			}
 
 			return m, m.setActivePane(m.focused)
 		case "0":
-			m.focused = UrlsPane
-			return m, m.setActivePane(UrlsPane)
+			m.focused = hostnamesPane
+			return m, m.setActivePane(hostnamesPane)
 		case "1":
-			m.focused = ReportsPane
-			return m, m.setActivePane(ReportsPane)
+			m.focused = reportsPane
+			return m, m.setActivePane(reportsPane)
 		case "2":
-			m.focused = ResultPane
-			return m, m.setActivePane(ResultPane)
+			m.focused = resultPane
+			return m, m.setActivePane(resultPane)
 		}
 	case CloseModalMsg:
 		m.showModal = false
 		return m, nil
-	case EnteredUrlMsg:
+	case EnteredURLMsg:
 		ctx, cancel := context.WithCancel(context.Background())
 
 		cmd := &runningCmd{ctx: ctx, cancel: cancel}
 
-		u, err := url.Parse(msg.Url)
+		u, err := url.Parse(msg.URL)
 		if err != nil {
 			return m, nil
 		}
 
-		return m, tea.Batch(getLighthouseResult(cmd, msg.Url), AddUniqueUrl(&m.urlsView.list, UrlItem{hostname: u.Hostname(), loading: true, cmd: cmd}), m.urlsView.spinner.Tick)
+		return m, tea.Batch(getLighthouseResult(cmd, msg.URL), addUniqueHostname(&m.urlsView.list, HostnameItem{hostname: u.Hostname(), loading: true, cmd: cmd}), m.urlsView.spinner.Tick)
 	case RestartMsg:
 		ctx, cancel := context.WithCancel(context.Background())
 		cmd := &runningCmd{ctx: ctx, cancel: cancel}
 
-		m.urlsView.SetLoading(cmd, msg.Index, true)
+		m.urlsView.setLoading(cmd, msg.Index, true)
 
-		return m, tea.Batch(getLighthouseResult(cmd, msg.Url), m.urlsView.spinner.Tick)
+		return m, tea.Batch(getLighthouseResult(cmd, msg.URL), m.urlsView.spinner.Tick)
 	case LighthouseMsg:
 		if msg.err != nil {
 			return m, nil
@@ -192,7 +189,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resultView.audits = msg.result.Report
 		m.resultView.loaded = true
 
-		cmds = append(cmds, StopLoading(&m.urlsView.list, msg.url))
+		cmds = append(cmds, stopLoading(&m.urlsView.list, msg.url))
 
 		u, err := url.Parse(msg.url)
 
@@ -200,7 +197,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if item, ok := m.urlsView.list.SelectedItem().(UrlItem); ok && item.hostname == u.Hostname() {
+		if item, ok := m.urlsView.list.SelectedItem().(HostnameItem); ok && item.hostname == u.Hostname() {
 			cmds = append(cmds, m.reportsView.InsertReport(msg.result.ReportName))
 		}
 
@@ -231,12 +228,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// View returns main app ui.
 func (m Model) View() tea.View {
 	var v tea.View
 
+	v.AltScreen = true
+
 	if m.error != nil {
 		v = tea.NewView(m.error.Error())
-	} else if m.showModal {
+
+		return v
+	}
+
+	if m.showModal {
 		v = m.modal.View(m.width, m.height)
 	} else {
 		bordersHeight := 2
@@ -246,36 +250,34 @@ func (m Model) View() tea.View {
 		if m.width > 150 {
 			asideWidth := min(m.width/5, 50)
 
-			urlsView := RenderPane("[0] Urls", m.urlsView.View(asideWidth, m.height-bordersHeight), asideWidth, m.height, m.focused == UrlsPane)
-			reportsView := RenderPane("[1] Reports", m.reportsView.View(m.height-bordersHeight), asideWidth, m.height, m.focused == ReportsPane)
+			urlsView := RenderPane("[0] Hostnames", m.urlsView.view(asideWidth, m.height-bordersHeight), asideWidth, m.height, m.focused == hostnamesPane)
+			reportsView := RenderPane("[1] Reports", m.reportsView.View(m.height-bordersHeight), asideWidth, m.height, m.focused == reportsPane)
 
 			sidePanelView = lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinHorizontal(lipgloss.Left, urlsView, reportsView))
 
-			resultView = RenderPane("[2] Result", m.resultView.View(m.width-asideWidth*2, m.height), m.width-asideWidth*2, m.height, m.focused == ResultPane)
+			resultView = RenderPane("[2] Result", m.resultView.View(m.width-asideWidth*2, m.height), m.width-asideWidth*2, m.height, m.focused == resultPane)
 		} else {
 			asideWidth := min(m.width/3, 50)
 			hPanesCount := 2
 
 			spareSpace := m.height - ((m.height / hPanesCount) * hPanesCount)
 
-			urlsView := RenderPane("[0] Urls", m.urlsView.View(asideWidth, (m.height/hPanesCount)-bordersHeight), asideWidth, m.height/2, m.focused == UrlsPane)
-			reportsView := RenderPane("[1] Reports", m.reportsView.View((m.height/hPanesCount)+spareSpace-bordersHeight), asideWidth, (m.height/2)+spareSpace, m.focused == ReportsPane)
+			urlsView := RenderPane("[0] Hostnames", m.urlsView.view(asideWidth, (m.height/hPanesCount)-bordersHeight), asideWidth, m.height/2, m.focused == hostnamesPane)
+			reportsView := RenderPane("[1] Reports", m.reportsView.View((m.height/hPanesCount)+spareSpace-bordersHeight), asideWidth, (m.height/2)+spareSpace, m.focused == reportsPane)
 
 			sidePanelView = lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView))
-			resultView = RenderPane("[2] Result", m.resultView.View(m.width-asideWidth, m.height), m.width-asideWidth, m.height, m.focused == ResultPane)
+			resultView = RenderPane("[2] Result", m.resultView.View(m.width-asideWidth, m.height), m.width-asideWidth, m.height, m.focused == resultPane)
 		}
 
 		v = tea.NewView(lipgloss.JoinHorizontal(lipgloss.Top, sidePanelView, resultView))
 	}
 
-	v.AltScreen = true
-
 	return v
 }
 
 func (m *Model) setActivePane(pane Pane) tea.Cmd {
-	m.reportsView.SetActive(m.focused == ReportsPane)
-	m.urlsView.SetActive(m.focused == UrlsPane)
+	m.reportsView.SetActive(m.focused == reportsPane)
+	m.urlsView.setActive(m.focused == hostnamesPane)
 
 	return func() tea.Msg {
 		return ActivePaneMsg{

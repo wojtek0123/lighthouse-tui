@@ -1,3 +1,4 @@
+// Package main is heart of the app.
 package main
 
 import (
@@ -16,11 +17,9 @@ func main() {
 		log.Fatalf("fatal error opening log file: %v", err)
 	}
 
-	defer func() {
-		if closeErr := f.Close(); closeErr != nil {
-			log.Printf("error closing log file: %v", closeErr)
-		}
-	}()
+	if closeErr := f.Close(); closeErr != nil {
+		log.Printf("error closing log file: %v", closeErr)
+	}
 
 	p := tea.NewProgram(ui.InitialModel())
 

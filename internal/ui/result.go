@@ -5,9 +5,10 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
 
+// LighthouseMsg is a Bubble Tea message dispatched when lighthouse report is finished.
 type LighthouseMsg struct {
 	url    string
-	result lighthouse.LighthouseResult
+	result *lighthouse.Result
 	err    error
 }
 

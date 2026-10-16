@@ -1,74 +1,83 @@
+// Package ui provides visual aspect of an app
 package ui
 
 import (
+	"errors"
+	"fmt"
+	"net/url"
+
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"errors"
-	"net/url"
 )
 
-type EnteredUrlMsg struct {
-	Url string
+// EnteredURLMsg is a Bubble Tea message dispatched when a user submits a URL.
+type EnteredURLMsg struct {
+	URL string
 }
 
+// CloseModalMsg is a Bubble Tea message signaling that any active modal should be closed.
 type CloseModalMsg struct{}
 
+// closeModal returns a Bubble Tea command that triggers a CloseModalMsg,
+// instructing the update loop to dismiss the current modal.
 func closeModal() tea.Cmd {
 	return func() tea.Msg {
 		return CloseModalMsg{}
 	}
 }
 
-func enterUrl(url string) tea.Cmd {
+// enterURL returns a Bubble Tea command that wraps the given URL into an
+// EnteredURLMsg message for processing in the update loop.
+func enterURL(url string) tea.Cmd {
 	return func() tea.Msg {
-		return EnteredUrlMsg{
-			Url: url,
+		return EnteredURLMsg{
+			URL: url,
 		}
 	}
 }
 
-func validateUrl(rawUrl string) error {
-	u, err := url.ParseRequestURI(rawUrl)
-
+// validateURL checks whether provided url is valid.
+func validateURL(rawURL string) error {
+	u, err := url.ParseRequestURI(rawURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid URL format: %w", err)
 	}
 
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return errors.New("URL must have start with 'http' or 'https'")
+		return errors.New("URL must start with http or https")
 	}
 
 	if u.Host == "" {
-		return errors.New("URL doesn't have host part")
+		return errors.New("URL is missing a host")
 	}
 
 	return nil
 }
 
-type UrlModal struct {
+// URLModal represents URL modal state with input and error.
+type URLModal struct {
 	input    textinput.Model
 	hasError bool
 	err      error
 }
 
-func NewUrlModal() *UrlModal {
+// NewURLModal returns URLModal object.
+func NewURLModal() *URLModal {
 	ti := textinput.New()
-	ti.Placeholder = "Enter url"
+	ti.Placeholder = "Enter URL"
 	ti.SetVirtualCursor(true)
 	ti.Focus()
 	ti.SetValue("https://wojciechpietraszuk.vercel.app")
 
-	return &UrlModal{input: ti}
+	return &URLModal{input: ti}
 }
 
-func (m UrlModal) Init() tea.Cmd {
-	return nil
-}
-
-func (m UrlModal) Update(msg tea.Msg) (UrlModal, tea.Cmd) {
+// Update updates URL modal state.
+func (m URLModal) Update(msg tea.Msg) (URLModal, tea.Cmd) {
 	var cmd tea.Cmd
 
+	//nolint:gocritic // keeping switch structure for future key cases
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -77,16 +86,16 @@ func (m UrlModal) Update(msg tea.Msg) (UrlModal, tea.Cmd) {
 		case "enter":
 			input := m.input.Value()
 
-			m.err = validateUrl(input)
+			m.err = validateURL(input)
 
 			if m.err != nil {
 				m.hasError = true
 				return m, nil
-			} else {
-				m.hasError = false
 			}
 
-			return m, tea.Batch(enterUrl(input), closeModal())
+			m.hasError = false
+
+			return m, tea.Batch(enterURL(input), closeModal())
 		}
 	}
 
@@ -95,20 +104,21 @@ func (m UrlModal) Update(msg tea.Msg) (UrlModal, tea.Cmd) {
 	return m, cmd
 }
 
-func (m UrlModal) View(width, height int) tea.View {
+// View returns url modal ui.
+func (m URLModal) View(width, height int) tea.View {
 	// TODO:
 	// - handle smaller resolutions
 
 	m.input.SetWidth(width / 4)
 
 	background := lipgloss.NewStyle().Background(lipgloss.Black).Padding(1, 2)
-	errMsgStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	// errMsgStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 
 	errorMsg := ""
 
-	if m.hasError {
-		errorMsg = errMsgStyle.Render(m.err.Error())
-	}
+	// if m.hasError {
+	// 	errorMsg = errMsgStyle.Render(m.err.Error())
+	// }
 
 	return tea.NewView(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, background.Render(lipgloss.JoinVertical(lipgloss.Left, "", m.input.View(), errorMsg))))
 }

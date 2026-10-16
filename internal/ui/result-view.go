@@ -10,13 +10,16 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
 )
 
+// Tab represents available tabs in result view.
 type Tab int
 
 const (
-	Overview Tab = iota
-	Performance
+	overview Tab = iota
+	performance
 )
 
+// ResultView represents the view model for displaying report results,
+// managing sub-tabs, and tracking interactive UI state in the TUI.
 type ResultView struct {
 	activeTab Tab
 	active    bool
@@ -26,7 +29,7 @@ type ResultView struct {
 
 	err    error
 	table  table.Model
-	audits lighthouse.LighthouseReport
+	audits *lighthouse.Report
 	loaded bool
 
 	hostname   string
@@ -35,6 +38,7 @@ type ResultView struct {
 	tabs *components.Tabs
 }
 
+// NewResultView creates result view.
 func NewResultView() *ResultView {
 	t := table.New()
 	overviewTab := NewOverviewTab()
@@ -46,24 +50,25 @@ func NewResultView() *ResultView {
 		loaded:         false,
 		table:          t,
 		overviewTab:    overviewTab,
-		activeTab:      Overview,
+		activeTab:      overview,
 		performanceTab: performanceTab,
 		tabs:           tabs,
 	}
 }
 
+// Update updates result view state.
 func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 	case ActivePaneMsg:
-		active := msg.pane == ResultPane
+		active := msg.pane == resultPane
 
 		r.tabs.SetFocus(active)
 		r.active = active
 		return r, nil
-	case UrlSelectedMsg:
+	case HostnameSelectedMsg:
 		r.hostname = msg.hostname
 		r.reportName = ""
 		r.loaded = false
@@ -79,7 +84,6 @@ func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 				r.audits = report
 				r.loaded = true
 			}
-
 		}
 	}
 
@@ -94,16 +98,18 @@ func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 	return r, tea.Batch(cmds...)
 }
 
+// SetActiveTab sets which tab is currently active.
 func (r *ResultView) SetActiveTab(index int) {
 	r.activeTab = Tab(index)
 }
 
+// View returns ui of ResultView as string.
 func (r ResultView) View(width, height int) string {
 	if r.loaded {
 		tab := ""
 
 		switch r.activeTab {
-		case Overview:
+		case overview:
 			categories := r.audits.Categories
 
 			perf := categories[lighthouse.Performance].Score
@@ -113,16 +119,17 @@ func (r ResultView) View(width, height int) string {
 			practises := categories[lighthouse.BestPractises].Score
 
 			tab = r.overviewTab.View(perf, accessibility, practises, seo, agentic, width)
-		case Performance:
+		case performance:
 			tab = r.performanceTab.View()
 		}
 
 		return lipgloss.NewStyle().Padding(0, 1).Render(lipgloss.JoinVertical(lipgloss.Top, r.tabs.View(), " ", tab))
-	} else {
-		return lipgloss.Place(width, height-2, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics")))
 	}
+
+	return lipgloss.Place(width, height-2, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics")))
 }
 
+// RenderPane renders pane with borders. Border color change based on focus state.
 func RenderPane(header, content string, width, height int, focus bool) string {
 	borderColor := inactiveBorderColor
 	titleColor := inactiveTitleColor
@@ -153,6 +160,7 @@ func RenderPane(header, content string, width, height int, focus bool) string {
 	return lipgloss.NewStyle().Width(width).Height(height - 1).Render(lipgloss.JoinVertical(lipgloss.Left, topBorder, body))
 }
 
-func (v *ResultView) SetHostname(hostname string) {
-	v.hostname = hostname
+// SetHostname sets which hostname is focus from HostnamesView.
+func (r *ResultView) SetHostname(hostname string) {
+	r.hostname = hostname
 }

@@ -1,3 +1,4 @@
+// Package components provides custom components.
 package components
 
 import (
@@ -7,16 +8,19 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// Tabs represents tabs state, manages tabs, and active and focus state.
 type Tabs struct {
 	items  []string
 	focus  bool
 	active int
 }
 
+// NewTabs creates tab component.
 func NewTabs() *Tabs {
 	return &Tabs{}
 }
 
+// Update is an update loop.
 func (t Tabs) Update(msg tea.Msg) (Tabs, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -34,11 +38,14 @@ func (t Tabs) Update(msg tea.Msg) (Tabs, tea.Cmd) {
 			}
 			return t, t.ChangeActiveTab()
 		}
+	case tea.WindowSizeMsg:
+		return t, nil
 	}
 
 	return t, cmd
 }
 
+// View returns tabs view.
 func (t Tabs) View() string {
 	inactiveStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	activeTabStyle := lipgloss.NewStyle().Bold(false).Foreground(lipgloss.Color("212"))
@@ -56,27 +63,33 @@ func (t Tabs) View() string {
 	return lipgloss.JoinHorizontal(lipgloss.Left, strings.Join(tabs, " "))
 }
 
+// SetTabs sets available tabs.
 func (t *Tabs) SetTabs(tabs []string) {
 	t.items = tabs
 }
 
+// SetActive sets active tab by index.
 func (t *Tabs) SetActive(i int) {
 	t.active = i
 }
 
+// Active return active tab index.
 func (t Tabs) Active() int {
 	return t.active
 }
 
+// SetFocus sets which tab is focus.
 func (t *Tabs) SetFocus(focus bool) {
 	t.focus = focus
 }
 
+// ActiveTabMsg is a Bubble Tea message dispatched when active tab changed.
 type ActiveTabMsg struct {
 	Index int
 	Label string
 }
 
+// ChangeActiveTab returns tea.Cmd to notify others views.
 func (t Tabs) ChangeActiveTab() tea.Cmd {
 	if len(t.items) == 0 {
 		return nil

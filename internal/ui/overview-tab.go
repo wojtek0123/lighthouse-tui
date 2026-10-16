@@ -8,10 +8,12 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// OverviewTab represents main tab of lighthouse report.
 type OverviewTab struct {
 	progress progress.Model
 }
 
+// NewOverviewTab returns OverviewTab.
 func NewOverviewTab() *OverviewTab {
 	p := progress.New()
 
@@ -20,6 +22,7 @@ func NewOverviewTab() *OverviewTab {
 	}
 }
 
+// Update keeps OverviewTab updated.
 func (t OverviewTab) Update(msg tea.Msg) (OverviewTab, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -29,6 +32,7 @@ func (t OverviewTab) Update(msg tea.Msg) (OverviewTab, tea.Cmd) {
 	return t, cmd
 }
 
+// View return overview tab ui.
 func (t OverviewTab) View(perf, accessibility, practises, seo, agentic float64, width int) string {
 	perfLine := t.viewResult(width, "Performance", perf)
 	accessibilityLine := t.viewResult(width, "Accessibility", accessibility)

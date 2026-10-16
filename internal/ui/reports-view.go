@@ -12,12 +12,13 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
 
-// type ReportMsg struct{}
-
+// ReportItem represents report list item, has filename which indicates where report has been finished.
 type ReportItem struct {
 	filename string
 }
 
+// ReportsView represents the view model for displaying report results,
+// managing reports list, and tracking interactive UI state in the TUI.
 type ReportsView struct {
 	list     list.Model
 	delegate *reportItemDelegate
@@ -26,6 +27,7 @@ type ReportsView struct {
 	active   bool
 }
 
+// FilterValue filters list items.
 func (i ReportItem) FilterValue() string { return i.filename }
 
 type reportItemDelegate struct {
@@ -35,9 +37,9 @@ type reportItemDelegate struct {
 	resultActive bool
 }
 
-func (d reportItemDelegate) Height() int                                  { return 1 }
-func (d reportItemDelegate) Spacing() int                                 { return 0 }
-func (d reportItemDelegate) Update(msg tea.Msg, list *list.Model) tea.Cmd { return nil }
+func (d reportItemDelegate) Height() int                             { return 1 }
+func (d reportItemDelegate) Spacing() int                            { return 0 }
+func (d reportItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d reportItemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
 	i, ok := listItem.(ReportItem)
 
@@ -62,10 +64,11 @@ func (d reportItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 	if _, err := fmt.Fprint(w, fn(str)); err != nil {
 		log.Printf("error rendering url list item: %v", err)
 	}
-
 }
 
-// it should return (*ReportsView, error)
+// it should return (*ReportsView, error)?
+
+// NewReportsView creates a ReportView.
 func NewReportsView(active bool) *ReportsView {
 	urls, err := lighthouse.GetHostnames()
 
@@ -106,15 +109,16 @@ func NewReportsView(active bool) *ReportsView {
 	}
 }
 
+// Update updates reports view state.
 func (v ReportsView) Update(msg tea.Msg) (ReportsView, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 	case ActivePaneMsg:
-		v.setResultPaneActive(msg.pane == ResultPane)
+		v.setResultPaneActive(msg.pane == resultPane)
 
-		if msg.pane != ReportsPane {
+		if msg.pane != reportsPane {
 			return v, nil
 		}
 
@@ -127,7 +131,7 @@ func (v ReportsView) Update(msg tea.Msg) (ReportsView, tea.Cmd) {
 	case DeleteHostnameMsg:
 		v.list.SetItems([]list.Item{})
 		return v, nil
-	case UrlSelectedMsg:
+	case HostnameSelectedMsg:
 		v.GetReports(msg.hostname)
 
 		return v, nil
@@ -149,12 +153,14 @@ func (v ReportsView) Update(msg tea.Msg) (ReportsView, tea.Cmd) {
 	return v, tea.Batch(cmds...)
 }
 
+// View returns result view.
 func (v ReportsView) View(height int) string {
 	v.list.SetHeight(height)
 
 	return v.list.View()
 }
 
+// GetReports gets reports based on provided hostname.
 func (v *ReportsView) GetReports(hostname string) {
 	reports, err := lighthouse.GetReports(hostname)
 
@@ -174,6 +180,7 @@ func (v *ReportsView) GetReports(hostname string) {
 	v.hostname = hostname
 }
 
+// InsertReport adds reportName to reports view list.
 func (v *ReportsView) InsertReport(reportName string) tea.Cmd {
 	items := v.list.Items()
 	items = append(items, ReportItem{filename: reportName})
@@ -183,15 +190,18 @@ func (v *ReportsView) InsertReport(reportName string) tea.Cmd {
 	return cmd
 }
 
+// SetActive sets list item which is currently active.
 func (v *ReportsView) SetActive(active bool) {
 	v.active = active
 	v.delegate.focus = active
 }
 
+// ReportSelectedMsg represents a name of the selected report.
 type ReportSelectedMsg struct {
 	reportName string
 }
 
+// selectReport returns tea.Cmd with selected report.
 func selectReport(reportName string) tea.Cmd {
 	return func() tea.Msg {
 		return ReportSelectedMsg{
@@ -200,6 +210,8 @@ func selectReport(reportName string) tea.Cmd {
 	}
 }
 
+// setResultPaneActive updates the active state of the result pane
+// within the view's delegate.
 func (v *ReportsView) setResultPaneActive(active bool) {
 	v.delegate.resultActive = active
 }

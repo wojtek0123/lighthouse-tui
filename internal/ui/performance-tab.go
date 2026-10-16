@@ -4,20 +4,23 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
+// PerformanceTab represents the performance results of lighthouse report.
 type PerformanceTab struct {
 }
 
+// NewPerformanceTab returns performance tab object.
 func NewPerformanceTab() *PerformanceTab {
-
 	return &PerformanceTab{}
 }
 
-func (t PerformanceTab) Update(msg tea.Msg) (PerformanceTab, tea.Cmd) {
+// Update runs in loop to keep up to date performance tab.
+func (t PerformanceTab) Update() (PerformanceTab, tea.Cmd) {
 	var cmd tea.Cmd
 
 	return t, cmd
 }
 
+// View renders performance tab for lighthouse report in result view.
 func (t PerformanceTab) View() string {
 	// perfLine := t.viewResult(width, "Performance", perf)
 	// accessibilityLine := t.viewResult(width, "Accessibility", accessibility)
@@ -27,12 +30,3 @@ func (t PerformanceTab) View() string {
 
 	return "PerformanceTab XD"
 }
-
-// func (t PerformanceTab) viewResult(windowWidth int, label string, value float64) string {
-// 	// maxWidth := 75
-// 	// width := min(windowWidth, maxWidth)
-// 	// bar := t.progress.ViewAs(value)
-// 	// gap := width - lipgloss.Width(label) - lipgloss.Width(bar) - 2
-//
-// 	return label + " PerformanceTab XD"
-// }

@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -15,7 +14,8 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
 
-type UrlSelectedMsg struct {
+// HostnameSelectedMsg is a Bubble Tea message dispatched when a user selects a specific hostname from a list or menu.
+type HostnameSelectedMsg struct {
 	hostname string
 }
 
@@ -43,48 +43,53 @@ func newStyles(darkBG bool) styles {
 	return s
 }
 
+// RestartMsg is a Bubble Tea message dispatched when getting report is restarted.
 type RestartMsg struct {
-	Url   string
+	URL   string
 	Index int
 }
 
+// CancelMsg is a Bubble Tea message dispatched when user cancels getting report.
 type CancelMsg struct {
 	Index int
 }
 
+// DeleteHostnameMsg is a Bubble Tea message dispatched when user deletes hostname.
 type DeleteHostnameMsg struct {
 	hostname string
 }
 
 func restart(url string, index int) tea.Cmd {
 	return func() tea.Msg {
-		return RestartMsg{Url: url, Index: index}
+		return RestartMsg{URL: url, Index: index}
 	}
 }
 
-type UrlItem struct {
+// HostnameItem is list item which can indicates loading state and shows hostname.
+type HostnameItem struct {
 	hostname string
 	loading  bool
 
 	cmd *runningCmd
 }
 
-func (i UrlItem) FilterValue() string { return "" }
+// FilterValue filters list items.
+func (i HostnameItem) FilterValue() string { return "" }
 
-type urlItemDelegate struct {
+type hostnameItemDelegate struct {
 	spinner *spinner.Model
 	styles  styles
 	focus   bool
 }
 
-func (d urlItemDelegate) Height() int                                  { return 1 }
-func (d urlItemDelegate) Spacing() int                                 { return 0 }
-func (d urlItemDelegate) Update(msg tea.Msg, list *list.Model) tea.Cmd { return nil }
-func (d urlItemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
-	i, ok := listItem.(UrlItem)
+func (d hostnameItemDelegate) Height() int                             { return 1 }
+func (d hostnameItemDelegate) Spacing() int                            { return 0 }
+func (d hostnameItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (d hostnameItemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+	i, ok := listItem.(HostnameItem)
 
 	if !ok {
-		log.Printf("error while asserting url item type")
+		log.Printf("error while asserting hostname item type")
 	}
 
 	spinner := ""
@@ -107,21 +112,22 @@ func (d urlItemDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 	}
 
 	if _, err := fmt.Fprint(w, fn(str)); err != nil {
-		log.Printf("error rendering url list item: %v", err)
+		log.Printf("error rendering hostname list item: %v", err)
 	}
 }
 
-type UrlsView struct {
+// HostnamesView represents list of hostnames, manages list of hostnames which were saved locally.
+type HostnamesView struct {
 	list     list.Model
 	spinner  *spinner.Model
-	delegate *urlItemDelegate
+	delegate *hostnameItemDelegate
 
 	active bool
 }
 
-// should it return (*UrlsView, error)?
-func NewUrlsView(active bool) *UrlsView {
-	urls, err := lighthouse.GetHostnames()
+// should it return (*HostnamesView, error)?
+func newHostnamesView(active bool) *HostnamesView {
+	hostnames, err := lighthouse.GetHostnames()
 
 	if err != nil {
 		log.Printf("error getting local hostnames: %v", err)
@@ -130,9 +136,9 @@ func NewUrlsView(active bool) *UrlsView {
 
 	items := []list.Item{}
 
-	for _, url := range urls {
-		items = append(items, UrlItem{
-			hostname: url,
+	for _, hostname := range hostnames {
+		items = append(items, HostnameItem{
+			hostname: hostname,
 			loading:  false,
 		})
 	}
@@ -143,9 +149,9 @@ func NewUrlsView(active bool) *UrlsView {
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	spinner := &s
-	delegate := &urlItemDelegate{styles: newStyles(false), focus: active, spinner: spinner}
+	delegate := &hostnameItemDelegate{styles: newStyles(false), focus: active, spinner: spinner}
 
-	list := list.New(items, urlItemDelegate{}, defaultWidth, listHeight)
+	list := list.New(items, hostnameItemDelegate{}, defaultWidth, listHeight)
 	list.SetFilteringEnabled(false)
 	list.SetShowStatusBar(false)
 	list.SetShowHelp(false)
@@ -153,25 +159,26 @@ func NewUrlsView(active bool) *UrlsView {
 	list.SetShowPagination(false)
 	list.SetDelegate(delegate)
 
-	return &UrlsView{list: list,
+	return &HostnamesView{list: list,
 		spinner:  spinner,
 		active:   active,
 		delegate: delegate,
 	}
 }
 
-func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
+// Update runs in loop to keep the state up to date.
+func (v HostnamesView) Update(msg tea.Msg) (HostnamesView, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 	case ActivePaneMsg:
-		if msg.pane != UrlsPane {
+		if msg.pane != hostnamesPane {
 			return v, nil
 		}
 
-		if selectedItem, ok := v.list.SelectedItem().(UrlItem); ok {
-			return v, selectUrl(selectedItem.hostname)
+		if selectedItem, ok := v.list.SelectedItem().(HostnameItem); ok {
+			return v, selectHostname(selectedItem.hostname)
 		}
 	case spinner.TickMsg:
 
@@ -185,7 +192,7 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "r":
-			item, ok := v.list.SelectedItem().(UrlItem)
+			item, ok := v.list.SelectedItem().(HostnameItem)
 
 			if !ok {
 				return v, nil
@@ -195,8 +202,7 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 		case "d":
 			// TODO:
 			// [ ] delete confirmation
-			if selectedItem, ok := v.list.SelectedItem().(UrlItem); ok {
-
+			if selectedItem, ok := v.list.SelectedItem().(HostnameItem); ok {
 				err := lighthouse.RemoveHostname(selectedItem.hostname)
 
 				if err != nil {
@@ -207,11 +213,9 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 				v.list.RemoveItem(i)
 
 				return v, deleteHostname(selectedItem.hostname)
-			} else {
-				return v, nil
 			}
 		case "c", "esc":
-			item, ok := v.list.SelectedItem().(UrlItem)
+			item, ok := v.list.SelectedItem().(HostnameItem)
 
 			if !ok {
 				return v, nil
@@ -240,25 +244,26 @@ func (v UrlsView) Update(msg tea.Msg) (UrlsView, tea.Cmd) {
 	}
 
 	if v.list.Index() != previousIndex {
-		if selectedItem, ok := v.list.SelectedItem().(UrlItem); ok {
-			cmds = append(cmds, selectUrl(selectedItem.hostname))
+		if selectedItem, ok := v.list.SelectedItem().(HostnameItem); ok {
+			cmds = append(cmds, selectHostname(selectedItem.hostname))
 		}
 	}
 
 	return v, tea.Batch(cmds...)
 }
 
-func (v UrlsView) View(width, height int) string {
+func (v HostnamesView) view(width, height int) string {
 	v.list.SetHeight(height)
 	v.list.SetWidth(width)
 
 	return v.list.View()
 }
 
-func (v UrlsView) SetLoading(cmd *runningCmd, index int, loading bool) {
-	item, ok := v.list.Items()[index].(UrlItem)
+func (v HostnamesView) setLoading(cmd *runningCmd, index int, loading bool) {
+	item, ok := v.list.Items()[index].(HostnameItem)
 
 	if !ok {
+		log.Printf("error asserting url item type")
 		return
 	}
 
@@ -268,40 +273,15 @@ func (v UrlsView) SetLoading(cmd *runningCmd, index int, loading bool) {
 	v.list.SetItem(index, item)
 }
 
-func (v UrlsView) IsLoading() bool {
-	items := v.list.Items()
-
-	for _, item := range items {
-		i := item.(UrlItem)
-
-		if i.loading {
-			return true
-		}
-	}
-
-	return false
-
-}
-
-func selectUrl(hostname string) tea.Cmd {
+func selectHostname(hostname string) tea.Cmd {
 	return func() tea.Msg {
-		return UrlSelectedMsg{hostname: hostname}
+		return HostnameSelectedMsg{hostname: hostname}
 	}
 }
 
-func (v UrlsView) GetSelectedItem() (UrlItem, error) {
-	i, ok := v.list.SelectedItem().(UrlItem)
-
-	if !ok {
-		return UrlItem{}, errors.New("Error parsing item")
-	}
-
-	return i, nil
-}
-
-func AddUniqueUrl(l *list.Model, newItem UrlItem) tea.Cmd {
+func addUniqueHostname(l *list.Model, newItem HostnameItem) tea.Cmd {
 	for i, item := range l.Items() {
-		if existingItem, ok := item.(UrlItem); ok {
+		if existingItem, ok := item.(HostnameItem); ok {
 			if existingItem.hostname == newItem.hostname {
 				existingItem.cmd = newItem.cmd
 				existingItem.loading = true
@@ -314,7 +294,7 @@ func AddUniqueUrl(l *list.Model, newItem UrlItem) tea.Cmd {
 	return l.InsertItem(0, newItem)
 }
 
-func StopLoading(l *list.Model, text string) tea.Cmd {
+func stopLoading(l *list.Model, text string) tea.Cmd {
 	u, err := url.Parse(text)
 
 	if err != nil {
@@ -322,9 +302,8 @@ func StopLoading(l *list.Model, text string) tea.Cmd {
 	}
 
 	for index, item := range l.Items() {
-		if i, ok := item.(UrlItem); ok {
+		if i, ok := item.(HostnameItem); ok {
 			if u.Hostname() == i.hostname {
-
 				if !ok {
 					return nil
 				}
@@ -339,7 +318,7 @@ func StopLoading(l *list.Model, text string) tea.Cmd {
 	return nil
 }
 
-func (v *UrlsView) SetActive(active bool) {
+func (v *HostnamesView) setActive(active bool) {
 	v.active = active
 	v.delegate.focus = active
 }
