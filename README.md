@@ -2,8 +2,8 @@
 
 Unofficial lighthouse TUI app.
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/yourusername/lighthouse-tui.svg)](https://pkg.go.dev/github.com/yourusername/lighthouse-tui)
-[![Go Report Card](https://goreportcard.com/badge/github.com/yourusername/lighthouse-tui)](https://goreportcard.com/report/github.com/yourusername/lighthouse-tui)
+[![Go Reference](https://pkg.go.dev/badge/github.com/wojtek0123/lighthouse-tui.svg)](https://pkg.go.dev/github.com/wojtek0123/lighthouse-tui)
+[![Go Report Card](https://goreportcard.com/badge/github.com/wojtek0123/lighthouse-tui)](https://goreportcard.com/report/github.com/wojtek0123/lighthouse-tui)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A blazing-fast, terminal-native interactive dashboard for auditing website performance, accessibility, SEO, and best practices. Built in **Go** using Charm's [Bubble Tea](https://github.com/charmbracelet/bubbletea) framework.
