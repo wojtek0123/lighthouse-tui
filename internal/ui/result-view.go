@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"cmp"
+	"maps"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/table"
@@ -10,49 +13,71 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
 )
 
-// Tab represents available tabs in result view.
-type Tab int
+// LighthouseMsg is a Bubble Tea message dispatched when lighthouse report is finished.
+type LighthouseMsg struct {
+	url    string
+	result *lighthouse.Result
+	err    error
+}
 
-const (
-	overview Tab = iota
-	performance
-)
+func getLighthouseResult(cmd *runningCmd, url string) tea.Cmd {
+	return func() tea.Msg {
+		result, err := lighthouse.RunLighthouse(cmd.ctx, url)
+
+		return LighthouseMsg{
+			url:    url,
+			result: result,
+			err:    err,
+		}
+	}
+}
+
+// Tab represents available tabs in result view.
+// type Tab int
+//
+// const (
+// 	overview Tab = iota
+// 	performance
+// )
 
 // ResultView represents the view model for displaying report results,
 // managing sub-tabs, and tracking interactive UI state in the TUI.
 type ResultView struct {
-	activeTab Tab
+	activeTab string
 	active    bool
+
+	categories []string
 
 	overviewTab    *OverviewTab
 	performanceTab *PerformanceTab
 
 	err    error
-	table  table.Model
-	audits *lighthouse.Report
+	report *lighthouse.Report
 	loaded bool
 
 	hostname   string
 	reportName string
 
-	tabs *components.Tabs
+	tabs         *components.Tabs
+	tables       []table.Model
+	focusedTable int
 }
 
 // NewResultView creates result view.
 func NewResultView() *ResultView {
-	t := table.New()
 	overviewTab := NewOverviewTab()
 	performanceTab := NewPerformanceTab()
 	tabs := components.NewTabs()
-	tabs.SetTabs([]string{"Overview", "Performance"})
+	// tabs.SetTabs([]string{"Overview", "Performance"})
 
 	return &ResultView{
 		loaded:         false,
-		table:          t,
 		overviewTab:    overviewTab,
-		activeTab:      overview,
+		activeTab:      "overview",
 		performanceTab: performanceTab,
 		tabs:           tabs,
+		focusedTable:   0,
+		tables:         []table.Model{},
 	}
 }
 
@@ -81,15 +106,26 @@ func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 			if err != nil {
 				r.err = err
 			} else {
-				r.audits = report
+				r.report = report
 				r.loaded = true
+				r.performanceTab.SetReport(report)
+				r.getTabs()
 			}
 		}
 	}
 
 	if r.active {
-		r.table, cmd = r.table.Update(msg)
-		cmds = append(cmds, cmd)
+		// r.table, cmd = r.table.Update(msg)
+		// cmds = append(cmds, cmd)
+
+		// if len(r.tables) > 0 && r.focusedTable < len(r.tables) {
+		// 	r.tables[r.focusedTable], cmd = r.tables[r.focusedTable].Update(msg)
+		// }
+
+		for i := range r.tables {
+			r.tables[i], cmd = r.tables[i].Update(msg)
+			cmds = append(cmds, cmd)
+		}
 
 		*r.tabs, cmd = r.tabs.Update(msg)
 		cmds = append(cmds, cmd)
@@ -99,34 +135,125 @@ func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 }
 
 // SetActiveTab sets which tab is currently active.
-func (r *ResultView) SetActiveTab(index int) {
-	r.activeTab = Tab(index)
+func (r *ResultView) SetActiveTab(tab string) {
+	r.activeTab = tab
 }
 
 // View returns ui of ResultView as string.
 func (r ResultView) View(width, height int) string {
+	r.tabs.SetTabs(r.categories)
+
 	if r.loaded {
-		tab := ""
+		tabContent := r.renderCategoryAudits(width - 4)
 
-		switch r.activeTab {
-		case overview:
-			categories := r.audits.Categories
-
-			perf := categories[lighthouse.Performance].Score
-			accessibility := categories[lighthouse.Accessibility].Score
-			seo := categories[lighthouse.SEO].Score
-			agentic := categories[lighthouse.AgenticBrowsing].Score
-			practises := categories[lighthouse.BestPractises].Score
-
-			tab = r.overviewTab.View(perf, accessibility, practises, seo, agentic, width)
-		case performance:
-			tab = r.performanceTab.View()
-		}
-
-		return lipgloss.NewStyle().Padding(0, 1).Render(lipgloss.JoinVertical(lipgloss.Top, r.tabs.View(), " ", tab))
+		return lipgloss.NewStyle().Padding(0, 1).Render(lipgloss.JoinVertical(lipgloss.Top, r.tabs.View(), " ", tabContent))
 	}
 
 	return lipgloss.Place(width, height-2, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics")))
+}
+
+func (v *ResultView) getTabs() {
+	v.categories = v.categories[:0]
+
+	for _, c := range slices.Collect(maps.Values(v.report.Categories)) {
+		v.categories = append(v.categories, c.ID)
+	}
+
+	v.categories = append(v.categories, "overview")
+
+	tabsOrder := map[string]int{
+		"overview":                         0,
+		string(lighthouse.Performance):     1,
+		string(lighthouse.Accessibility):   2,
+		string(lighthouse.BestPractises):   3,
+		string(lighthouse.SEO):             4,
+		string(lighthouse.AgenticBrowsing): 5,
+	}
+
+	slices.SortFunc(v.categories, func(a, b string) int {
+		pA, existsA := tabsOrder[a]
+		pB, existsB := tabsOrder[b]
+
+		if !existsA {
+			pA = 999
+		}
+		if !existsB {
+			pB = 999
+		}
+
+		return cmp.Compare(pA, pB)
+	})
+}
+
+func (v *ResultView) renderCategoryAudits(width int) string {
+	if v.activeTab == "overview" {
+		return ""
+	}
+
+	auditRefs := v.report.Categories[lighthouse.CategoryID(v.activeTab)].AuditRefs
+
+	grouped := make(map[string][]lighthouse.AuditRefs)
+
+	// component := map[string]string{
+	// 	"metrics": "progress",
+	// }
+
+	for _, ref := range auditRefs {
+		groupKey := ref.Group
+		grouped[groupKey] = append(grouped[groupKey], ref)
+	}
+
+	groups := slices.Collect(maps.Keys(grouped))
+
+	// tables := []table.Model{}
+
+	for _, g := range groups {
+		if g == "metrics" {
+			continue
+		}
+
+		t := table.New()
+
+		columns := []table.Column{
+			{Title: "Name", Width: width},
+		}
+		rows := []table.Row{}
+
+		for _, a := range grouped[g] {
+			audit := v.report.Audits[a.ID]
+
+			rows = append(rows, table.Row{audit.Title})
+		}
+
+		t.SetHeight(len(rows))
+		t.SetWidth(width)
+		t.SetColumns(columns)
+		t.SetRows(rows)
+		v.tables = append(v.tables, t)
+	}
+
+	// table := table.New()
+
+	// catergoryGroups
+
+	// group == metric  to progress bar, reszta tabelka
+
+	// auditIDs map[lighthouse.CategoryID][]string
+	//
+	// group audits per group field
+	// metrics -> progress bar
+	// insights -> table with audits -> audit details (separate view?)
+	// diagnostics -> table with audits
+
+	// view := ""
+
+	tableViews := []string{}
+
+	for _, t := range v.tables {
+		tableViews = append(tableViews, t.View(), " ")
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Top, tableViews...)
 }
 
 // RenderPane renders pane with borders. Border color change based on focus state.

@@ -57,7 +57,7 @@ func (d reportItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 		}
 	} else if index == m.Index() && d.resultActive {
 		fn = func(s ...string) string {
-			return lipgloss.JoinHorizontal(lipgloss.Left, ">", strings.Join(s, " "))
+			return lipgloss.JoinHorizontal(lipgloss.Left, lipgloss.NewStyle().Foreground(lipgloss.Color("170")).Render(">"), strings.Join(s, " "))
 		}
 	}
 
@@ -123,7 +123,7 @@ func (v ReportsView) Update(msg tea.Msg) (ReportsView, tea.Cmd) {
 		}
 
 		if selectedItem, ok := v.list.SelectedItem().(ReportItem); ok {
-			return v, selectReport(selectedItem.filename)
+			return v, SelectReport(selectedItem.filename)
 		}
 
 		return v, nil
@@ -146,7 +146,7 @@ func (v ReportsView) Update(msg tea.Msg) (ReportsView, tea.Cmd) {
 
 	if v.list.Index() != previousIndex {
 		if selectedItem, ok := v.list.SelectedItem().(ReportItem); ok {
-			cmds = append(cmds, selectReport(selectedItem.filename))
+			cmds = append(cmds, SelectReport(selectedItem.filename))
 		}
 	}
 
@@ -201,8 +201,8 @@ type ReportSelectedMsg struct {
 	reportName string
 }
 
-// selectReport returns tea.Cmd with selected report.
-func selectReport(reportName string) tea.Cmd {
+// SelectReport returns tea.Cmd with selected report.
+func SelectReport(reportName string) tea.Cmd {
 	return func() tea.Msg {
 		return ReportSelectedMsg{
 			reportName: reportName,
@@ -214,4 +214,15 @@ func selectReport(reportName string) tea.Cmd {
 // within the view's delegate.
 func (v *ReportsView) setResultPaneActive(active bool) {
 	v.delegate.resultActive = active
+}
+
+// SelectedReport returns the current selected report item.
+func (v *ReportsView) SelectedReport() string {
+	i, ok := v.list.SelectedItem().(ReportItem)
+
+	if !ok {
+		return ""
+	}
+
+	return i.filename
 }
