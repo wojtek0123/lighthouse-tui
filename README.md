@@ -1,4 +1,4 @@
-# 🗼 Lighthouse TUI
+# 🗼 Lighthouse TUI (work in progress)
 
 Unofficial lighthouse TUI app.
 
