@@ -7,7 +7,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
-	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
 )
 
 // func renderPane(title, content string, width, height int, isActive bool) string {
@@ -206,10 +205,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, tea.Batch(cmds...)
-	case components.ActiveTabMsg:
-		m.resultView.SetActiveTab(msg.Label)
-
-		return m, nil
+	// case components.ActiveTabMsg:
+	// 	m.resultView.SetActiveTab(msg.Label)
+	//
+	// 	return m, nil
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -237,15 +236,16 @@ func (m Model) View() tea.View {
 	var v tea.View
 
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 
 	if m.error != nil {
-		v = tea.NewView(m.error.Error())
+		v.SetContent(m.error.Error())
 
 		return v
 	}
 
 	if m.showModal {
-		v = m.modal.View(m.width, m.height)
+		v.SetContent(m.modal.View(m.width, m.height))
 	} else {
 		bordersHeight := 2
 		sidePanelView := ""
@@ -279,7 +279,7 @@ func (m Model) View() tea.View {
 			resultView = RenderPane(resultTitle, m.resultView.View(m.width-asideWidth, m.height), m.width-asideWidth, m.height, m.focused == resultPane)
 		}
 
-		v = tea.NewView(lipgloss.JoinHorizontal(lipgloss.Top, sidePanelView, resultView))
+		v.SetContent(lipgloss.JoinHorizontal(lipgloss.Top, sidePanelView, resultView))
 	}
 
 	return v

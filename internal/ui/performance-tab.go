@@ -45,13 +45,13 @@ func (t PerformanceTab) View(width int) string {
 		return ""
 	}
 
-	metrics := []string{"first-contentful-paint", "largest-contentful-paint", "cumulative-layout-shift", "total-blocking-time", "speed-index"}
+	// metrics := []string{"first-contentful-paint", "largest-contentful-paint", "cumulative-layout-shift", "total-blocking-time", "speed-index"}
 
 	labels := []string{}
 
-	for _, m := range metrics {
-		labels = append(labels, t.viewResult(width, t.report.Audits[m].Title, t.report.Audits[m].Score), "")
-	}
+	// for _, m := range metrics {
+	// labels = append(labels, t.viewResult(width, t.report.Audits[m].Title, t.report.Audits[m].Score), "")
+	// }
 
 	auditRefs := t.report.Categories[lighthouse.Performance].AuditRefs
 

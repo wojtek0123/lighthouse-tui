@@ -40,17 +40,31 @@ type Result struct {
 
 // check if lightyhouse version is supported.
 
+type ScoreDisplayMode string
+
+const (
+	MetricSavings ScoreDisplayMode = "metricSavings"
+	NonApplicable ScoreDisplayMode = "notApplicable"
+	Informative   ScoreDisplayMode = "informative"
+	Numeric       ScoreDisplayMode = "numeric"
+	Binary        ScoreDisplayMode = "binary"
+	Manual        ScoreDisplayMode = "manual"
+	Error         ScoreDisplayMode = "error"
+)
+
 // Report represents lighthouse reports in json format.
 type Report struct {
 	FetchTime         string `json:"fetchTime"`
 	LighthouseVersion string `json:"lighthouseVersion"`
 	Audits            map[string]struct {
 		NumericValue float64 `json:"numericValue"`
-		DisplayValue string  `json:"displayValue"`
-		Title        string  `json:"title"`
-		Description  string  `json:"description"`
-		Unit         string  `json:"numericUnit"`
-		Score        float64 `json:"score"`
+
+		DisplayValue     string           `json:"displayValue"`
+		Title            string           `json:"title"`
+		Description      string           `json:"description"`
+		Unit             string           `json:"numericUnit"`
+		Score            *float64         `json:"score"`
+		ScoreDisplayMode ScoreDisplayMode `json:"scoreDisplayMode"`
 	} `json:"audits"`
 	Categories map[CategoryID]Categories
 }

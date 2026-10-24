@@ -4,56 +4,30 @@ package components
 import (
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
-// Tabs represents tabs state, manages tabs, and active and focus state.
-type Tabs struct {
-	items  []string
-	focus  bool
-	active int
+// Tab represents tabs state, manages tabs, and active and focus state.
+type Tab struct {
+	items []string
+	focus bool
+	index int
 }
 
 // NewTabs creates tab component.
-func NewTabs() *Tabs {
-	return &Tabs{}
-}
-
-// Update is an update loop.
-func (t Tabs) Update(msg tea.Msg) (Tabs, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "[":
-			if t.active > 0 {
-				t.active--
-			}
-			return t, t.ChangeActiveTab()
-		case "]":
-			if t.active < len(t.items)-1 {
-				t.active++
-			}
-			return t, t.ChangeActiveTab()
-		}
-	case tea.WindowSizeMsg:
-		return t, nil
-	}
-
-	return t, cmd
+func NewTabs() *Tab {
+	return &Tab{}
 }
 
 // View returns tabs view.
-func (t Tabs) View() string {
+func (t *Tab) View() string {
 	inactiveStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	activeTabStyle := lipgloss.NewStyle().Bold(false).Foreground(lipgloss.Color("212"))
 
 	tabs := []string{}
 
 	for i, tab := range t.items {
-		if i == t.active && t.focus {
+		if i == t.index && t.focus {
 			tabs = append(tabs, activeTabStyle.Render(tab))
 		} else {
 			tabs = append(tabs, inactiveStyle.Render(tab))
@@ -64,41 +38,43 @@ func (t Tabs) View() string {
 }
 
 // SetTabs sets available tabs.
-func (t *Tabs) SetTabs(tabs []string) {
+func (t *Tab) SetTabs(tabs []string) {
 	t.items = tabs
 }
 
 // SetActive sets active tab by index.
-func (t *Tabs) SetActive(i int) {
-	t.active = i
+func (t *Tab) SetActive(i int) {
+	t.index = i
 }
 
 // Active return active tab index.
-func (t Tabs) Active() int {
-	return t.active
+func (t Tab) Active() int {
+	return t.index
 }
 
 // SetFocus sets which tab is focus.
-func (t *Tabs) SetFocus(focus bool) {
+func (t *Tab) SetFocus(focus bool) {
 	t.focus = focus
 }
 
-// ActiveTabMsg is a Bubble Tea message dispatched when active tab changed.
-type ActiveTabMsg struct {
-	Index int
-	Label string
+// Next changes tab index to next
+func (t *Tab) Next() {
+	if t.index == len(t.items)-1 {
+		t.index = 0
+	} else {
+		t.index++
+	}
 }
 
-// ChangeActiveTab returns tea.Cmd to notify others views.
-func (t Tabs) ChangeActiveTab() tea.Cmd {
-	if len(t.items) == 0 {
-		return nil
+// Previous changes tab index to previous
+func (t *Tab) Previous() {
+	if t.index == 0 {
+		t.index = len(t.items) - 1
+	} else {
+		t.index--
 	}
+}
 
-	return func() tea.Msg {
-		return ActiveTabMsg{
-			Index: t.active,
-			Label: t.items[t.active],
-		}
-	}
+func (t Tab) Index() int {
+	return t.index
 }
