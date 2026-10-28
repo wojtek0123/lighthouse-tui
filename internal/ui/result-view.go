@@ -2,15 +2,12 @@ package ui
 
 import (
 	"cmp"
-	"fmt"
 	"maps"
 	"slices"
-	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/table"
-	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
@@ -45,34 +42,50 @@ type ResultView struct {
 
 	overviewTab *OverviewTab
 
-	err    error
-	report *lighthouse.Report
-	loaded bool
+	err     error
+	report  *lighthouse.Report
+	metrics []lighthouse.AuditRefs
+	loaded  bool
 
 	hostname   string
 	reportName string
 
 	tabs         *components.Tab
-	tables       []table.Model
+	table        table.Model
 	progressBars []progress.Model
-	focusedTable int
+	// viewport     viewport.Model
+	cursor int
 
-	ready    bool
-	viewport viewport.Model
+	width int
+	ready bool
 }
 
 // NewResultView creates result view.
 func NewResultView() *ResultView {
 	overviewTab := NewOverviewTab()
 	tabs := components.NewTabs()
+	table := table.New()
+	table.Focus()
+	// // s := table.DefaultStyles()
+	// s.Header = s.Header.
+	// 	BorderStyle(lipgloss.NormalBorder()).
+	// 	BorderForeground(lipgloss.Color("240")).
+	// 	BorderBottom(true).
+	// 	Bold(false)
+	// s.Selected = s.Selected.
+	// 	Foreground(lipgloss.Color("229")).
+	// 	Background(lipgloss.Color("57")).
+	// 	Bold(false)
+	// t.SetStyles(s)
+	// table.SetStyles()
 
 	return &ResultView{
-		loaded:       false,
-		overviewTab:  overviewTab,
-		activeTab:    "overview",
-		tabs:         tabs,
-		focusedTable: 0,
-		tables:       []table.Model{},
+		loaded:      false,
+		overviewTab: overviewTab,
+		activeTab:   "overview",
+		tabs:        tabs,
+		cursor:      0,
+		table:       table,
 	}
 }
 
@@ -91,10 +104,10 @@ func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 
 			v.tabs.Previous()
 			v.activeTab = v.categories[v.tabs.Index()]
-			v.initTables(80)
-			metrics := v.renderMetrics()
-			content := v.renderCategoryAudits()
-			v.viewport.SetContent(lipgloss.JoinVertical(lipgloss.Top, metrics, " ", content))
+			v.initAudits(80)
+			// metrics := v.renderMetrics(80)
+			// content := v.renderCategoryAudits()
+			// v.viewport.SetContent(lipgloss.JoinVertical(lipgloss.Top, metrics, " ", content))
 		case "]":
 			if !v.active {
 				return v, nil
@@ -102,10 +115,11 @@ func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 
 			v.tabs.Next()
 			v.activeTab = v.categories[v.tabs.Index()]
-			v.initTables(80)
-			metrics := v.renderMetrics()
-			content := v.renderCategoryAudits()
-			v.viewport.SetContent(lipgloss.JoinVertical(lipgloss.Top, metrics, " ", content))
+			v.initAudits(80)
+			// v.table[v.cursor].Focus()
+			// metrics := v.renderMetrics(30)
+			// content := v.renderCategoryAudits()
+			// v.viewport.SetContent(lipgloss.JoinVertical(lipgloss.Top, metrics, " ", content))
 		}
 	case ActivePaneMsg:
 		active := msg.pane == resultPane
@@ -129,35 +143,16 @@ func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 				v.loaded = true
 				// r.performanceTab.SetReport(report)
 				v.getTabs()
-				v.initTables(30) // Initialize tables once report is loaded
-				content := v.renderCategoryAudits()
-				v.viewport.SetContent(content)
+				v.table.Focus()
+				v.initAudits(30) // Initialize tables once report is loaded
+				// content := v.renderCategoryAudits()
+				// v.viewport.SetContent(content)
 			}
 		}
-	case tea.WindowSizeMsg:
-		headerHeight := 1
-
-		if !v.ready {
-			v.viewport = viewport.New(viewport.WithWidth(90), viewport.WithHeight(msg.Height-10))
-			v.viewport.YPosition = headerHeight
-			v.viewport.HighlightNext()
-			v.ready = true
-		} else {
-			v.viewport.SetWidth(msg.Width - 100)
-			v.viewport.SetHeight(msg.Height - 10)
-			v.initTables(msg.Width - 40) // Re-initialize/resize tables on window resize if needed
-		}
 	}
 
-	if v.active {
-		if len(v.tables) > 0 && v.focusedTable >= 0 && v.focusedTable < len(v.tables) {
-			v.tables[v.focusedTable], cmd = v.tables[v.focusedTable].Update(msg)
-			cmds = append(cmds, cmd)
-		}
-
-		v.viewport, cmd = v.viewport.Update(msg)
-		cmds = append(cmds, cmd)
-	}
+	v.table, cmd = v.table.Update(msg)
+	cmds = append(cmds, cmd)
 
 	return v, tea.Batch(cmds...)
 }
@@ -180,15 +175,15 @@ func (v ResultView) View(width, height int) string {
 		)
 	}
 
+	metrics := v.renderMetrics(30)
+
 	return lipgloss.NewStyle().Padding(0, 1).Render(
 		lipgloss.JoinVertical(
 			lipgloss.Top,
-			v.activeTab,
-			strconv.Itoa(len(v.tables)),
 			v.tabs.View(),
 			" ",
-			v.viewport.View(),
-			v.footerView(),
+			metrics,
+			v.table.View(),
 		),
 	)
 }
@@ -226,8 +221,9 @@ func (v *ResultView) getTabs() {
 	})
 }
 
-func (v *ResultView) initTables(width int) {
-	v.tables = []table.Model{}
+func (v *ResultView) initAudits(width int) {
+	// v.table = []table.Model{}
+	v.metrics = []lighthouse.AuditRefs{}
 
 	if v.activeTab == "overview" || v.report == nil {
 		return
@@ -248,9 +244,16 @@ func (v *ResultView) initTables(width int) {
 	groups := slices.Collect(maps.Keys(grouped))
 	slices.Sort(groups)
 
+	columns := []table.Column{
+		{Title: "", Width: width / 3},
+		{Title: "", Width: width / 3},
+		{Title: "", Width: width / 3},
+	}
+	rows := []table.Row{}
+
 	for _, g := range groups {
 		if g == "metrics" || g == "hidden" {
-			v.buildMetrics(grouped[g], width)
+			v.metrics = grouped[g]
 		}
 
 		if g == "hidden" {
@@ -260,12 +263,6 @@ func (v *ResultView) initTables(width int) {
 		if g == "" {
 			continue
 		}
-
-		columns := []table.Column{
-			{Title: g, Width: width / 2},
-			{Title: "", Width: width / 2},
-		}
-		rows := []table.Row{}
 
 		for _, a := range grouped[g] {
 			audit, ok := v.report.Audits[a.ID]
@@ -278,37 +275,31 @@ func (v *ResultView) initTables(width int) {
 				continue
 			}
 
-			rows = append(rows, table.Row{audit.Title, audit.DisplayValue})
+			rows = append(rows, table.Row{g, audit.Title, audit.DisplayValue})
 		}
 
-		if len(rows) == 0 {
-			continue
-		}
-
-		if len(rows) > 0 {
-			t := table.New()
-			t.SetHeight(len(rows))
-			t.SetWidth(width)
-			t.SetColumns(columns)
-			t.SetRows(rows)
-
-			v.tables = append(v.tables, t)
-		}
 	}
 
-	// Reset focused table index if it goes out of bounds
-	if v.focusedTable >= len(v.tables) {
-		v.focusedTable = 0
+	if len(rows) == 0 {
+		return
+	}
+
+	if len(rows) > 0 {
+		// t := table.New()
+		v.table.SetHeight(len(rows))
+		v.table.SetWidth(width)
+		v.table.SetColumns(columns)
+		v.table.SetRows(rows)
 	}
 }
 
 const progressMaxWidth = 75
 
-func (v *ResultView) buildMetrics(auditRefs []lighthouse.AuditRefs, width int) {
-	v.progressBars = []progress.Model{}
+func (v ResultView) renderMetrics(width int) string {
+	views := []string{}
 
-	for _, a := range auditRefs {
-		audit, ok := v.report.Audits[a.ID]
+	for _, metric := range v.metrics {
+		audit, ok := v.report.Audits[metric.ID]
 
 		if !ok {
 			continue
@@ -321,18 +312,7 @@ func (v *ResultView) buildMetrics(auditRefs []lighthouse.AuditRefs, width int) {
 		p := progress.New()
 		p.SetWidth(min(width, progressMaxWidth))
 
-		p.SetPercent(*audit.Score)
-
-		v.progressBars = append(v.progressBars, p)
-	}
-}
-
-func (v ResultView) renderMetrics() string {
-
-	views := []string{}
-
-	for _, p := range v.progressBars {
-		views = append(views, p.View(), " ")
+		views = append(views, lipgloss.JoinHorizontal(lipgloss.Left, audit.Title, p.ViewAs(*audit.Score)), " ")
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Top, views...)
@@ -343,22 +323,22 @@ func (v ResultView) renderCategoryAudits() string {
 		return ""
 	}
 
-	if len(v.tables) == 0 {
-		return ""
-	}
+	// if len(v.table) == 0 {
+	// 	return ""
+	// }
 
-	tableViews := []string{}
+	// tableViews := []string{}
 
-	for i, t := range v.tables {
-		view := t.View()
-		// Optional: Highlight the focused table if you want visual feedback
-		if i == v.focusedTable {
-			view = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("205")).Render(view)
-		}
-		tableViews = append(tableViews, view, " ")
-	}
+	// for i, t := range v.table {
+	// 	view := t.View()
+	//
+	// 	if i == v.cursor {
+	// 		view = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("205")).Render(view)
+	// 	}
+	// 	tableViews = append(tableViews, view, " ")
+	// }
 
-	return lipgloss.JoinVertical(lipgloss.Top, tableViews...)
+	return lipgloss.JoinVertical(lipgloss.Top, v.table.View())
 }
 
 // RenderPane renders pane with borders. Border color change based on focus state.
@@ -390,26 +370,6 @@ func RenderPane(header, content string, width, height int, focus bool) string {
 	body := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Width(width).Height(height - 1).BorderTop(false).BorderForeground(borderColor).Render(content)
 
 	return lipgloss.NewStyle().Width(width).Height(height - 1).Render(lipgloss.JoinVertical(lipgloss.Left, topBorder, body))
-}
-
-var (
-	titleStyle = func() lipgloss.Style {
-		b := lipgloss.RoundedBorder()
-		b.Right = "├"
-		return lipgloss.NewStyle().BorderStyle(b).Padding(0, 1)
-	}()
-
-	infoStyle = func() lipgloss.Style {
-		b := lipgloss.RoundedBorder()
-		b.Left = "┤"
-		return titleStyle.BorderStyle(b)
-	}()
-)
-
-func (v ResultView) footerView() string {
-	info := infoStyle.Render(fmt.Sprintf("%3.f%%:%3.f%%", v.viewport.ScrollPercent()*100, v.viewport.HorizontalScrollPercent()*100))
-	line := strings.Repeat("─", max(0, v.viewport.Width()-lipgloss.Width(info)))
-	return lipgloss.JoinHorizontal(lipgloss.Center, line, info)
 }
 
 // SetHostname sets which hostname is focus from HostnamesView.
