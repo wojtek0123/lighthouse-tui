@@ -244,11 +244,17 @@ func (v *ResultView) initAudits(width int) {
 	groups := slices.Collect(maps.Keys(grouped))
 	slices.Sort(groups)
 
+	// different columns for different tab
 	columns := []table.Column{
-		{Title: "", Width: width / 3},
-		{Title: "", Width: width / 3},
-		{Title: "", Width: width / 3},
+		{Title: "Score", Width: width / 3},
+		{Title: "Category", Width: width / 3},
+		{Title: "Name", Width: width / 3},
 	}
+
+	// if catID == lighthouse.Performance {
+	// columns = append(columns, table.Column{Title: "Impact / Savings", Width: width / 4})
+	// }
+
 	rows := []table.Row{}
 
 	for _, g := range groups {
@@ -275,7 +281,8 @@ func (v *ResultView) initAudits(width int) {
 				continue
 			}
 
-			rows = append(rows, table.Row{g, audit.Title, audit.DisplayValue})
+			rows = append(rows, table.Row{scoreToStatus(audit.Score, audit.ScoreDisplayMode), g, audit.Title})
+
 		}
 
 	}
@@ -291,6 +298,38 @@ func (v *ResultView) initAudits(width int) {
 		v.table.SetColumns(columns)
 		v.table.SetRows(rows)
 	}
+}
+
+func scoreToStatus(score *float64, scoreDisplayMode lighthouse.ScoreDisplayMode) string {
+	if scoreDisplayMode == lighthouse.NonApplicable {
+		return "N/A"
+	}
+
+	if scoreDisplayMode == lighthouse.Manual {
+		return lipgloss.NewStyle().Foreground(lipgloss.Yellow).Render("NEED VERIFICATION")
+	}
+
+	if scoreDisplayMode == lighthouse.Error {
+		return lipgloss.NewStyle().Foreground(lipgloss.Red).Render("AUDIT FAILED TO RUN")
+	}
+
+	if scoreDisplayMode == lighthouse.Informative {
+		return lipgloss.NewStyle().Foreground(lipgloss.Blue).Render("DIAGNOSTIC")
+	}
+
+	if score == nil {
+		return "-"
+	}
+
+	if *score > 0.89 {
+		return lipgloss.NewStyle().Foreground(lipgloss.Green).Render("GOOD")
+	}
+
+	if *score > 0.50 {
+		return lipgloss.NewStyle().Foreground(lipgloss.Yellow).Render("NEEDS IMPROVEMENT")
+	}
+
+	return lipgloss.NewStyle().Foreground(lipgloss.Red).Render("POOR")
 }
 
 const progressMaxWidth = 75
@@ -309,10 +348,22 @@ func (v ResultView) renderMetrics(width int) string {
 			continue
 		}
 
-		p := progress.New()
+		color := lipgloss.Red
+
+		if *audit.Score > 0.9 {
+			color = lipgloss.Green
+		} else if *audit.Score > 0.5 {
+			color = lipgloss.Yellow
+		}
+
+		p := progress.New(progress.WithColors(color))
 		p.SetWidth(min(width, progressMaxWidth))
 
-		views = append(views, lipgloss.JoinHorizontal(lipgloss.Left, audit.Title, p.ViewAs(*audit.Score)), " ")
+		freeSpace := 60 - lipgloss.Width(audit.Title) - lipgloss.Width(p.ViewAs(*audit.Score))
+
+		separator := strings.Repeat(" ", freeSpace)
+
+		views = append(views, lipgloss.JoinHorizontal(lipgloss.Left, audit.Title, separator, p.ViewAs(*audit.Score)), " ")
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Top, views...)
