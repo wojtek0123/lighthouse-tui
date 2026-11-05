@@ -70,16 +70,10 @@ func (d reportItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 
 // NewReportsView creates a ReportView.
 func NewReportsView(active bool) *ReportsView {
-	urls, err := lighthouse.GetHostnames()
+	reports, err := initReports()
 
 	if err != nil {
-		return &ReportsView{}
-	}
-
-	reports, err := lighthouse.GetReports(urls[0])
-
-	if err != nil {
-		return &ReportsView{}
+		return nil
 	}
 
 	items := []list.Item{}
@@ -103,10 +97,31 @@ func NewReportsView(active bool) *ReportsView {
 
 	return &ReportsView{
 		list:     list,
-		hostname: urls[0],
 		delegate: delegate,
 		active:   active,
 	}
+}
+
+func initReports() ([]string, error) {
+	urls, err := lighthouse.GetHostnames()
+
+	if err != nil {
+		return []string{}, err
+	}
+
+	if len(urls) == 0 {
+		return []string{}, nil
+	}
+
+	url := urls[0]
+
+	reports, err := lighthouse.GetReports(url)
+
+	if err != nil {
+		return []string{}, nil
+	}
+
+	return reports, nil
 }
 
 // Update updates reports view state.

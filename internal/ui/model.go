@@ -186,15 +186,15 @@ func (m Model) View() tea.View {
 	v.AltScreen = true
 
 	if m.error != nil {
-		v = tea.NewView(m.error.Error())
+		v.Content = m.error.Error()
 
 		return v
 	}
 
 	if m.showModal {
-		v = m.modal.View(m.width, m.height)
+		v.Content = m.modal.View(m.width, m.height)
 	} else {
-		v = tea.NewView(m.renderView())
+		v.Content = m.renderView()
 	}
 
 	return v
@@ -209,53 +209,50 @@ func (m Model) renderView() string {
 		return lipgloss.JoinHorizontal(lipgloss.Center, "Window is to small: ", strconv.Itoa(m.width), "x", strconv.Itoa(m.height))
 	}
 
-	// if m.width > 100 {
-	// 	return m.renderVerticalLayout()
-	// }
+	if m.width > 100 {
+		return m.renderVerticalLayout()
+	}
 
 	return m.renderHorizontalLayout()
 }
 
 func (m Model) renderHorizontalLayout() string {
-	// bordersHeight := 2
+	bordersHeight := 0
+	height := m.height - bordersHeight
 
-	// height / 5
-	// urls 1/5
-	// reports 1/5
-	// result 3/5
-
-	urlsView := RenderPane("[0] Hostnames", m.urlsView.view(m.width, m.height/5), m.width, m.height/5, m.focused == hostnamesPane)
-	reportsView := RenderPane("[1] Reports", m.reportsView.View(m.height/5), m.width, m.height/5, m.focused == reportsPane)
-	resultView := RenderPane("[2] Result", m.resultView.View(m.width, (m.height/5)*3), m.width, (m.height/5)*3, m.focused == resultPane)
+	urlsView := RenderPane("[0] Hostnames", m.urlsView.view(m.width, height/5), m.width, height/5, m.focused == hostnamesPane)
+	reportsView := RenderPane("[1] Reports", m.reportsView.View(height/5), m.width, height/5, m.focused == reportsPane)
+	resultView := RenderPane("[2] Result", m.resultView.View(m.width, (height/5)*3), m.width, (height/5)*3, m.focused == resultPane)
 
 	return lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView, resultView)
 }
 
 func (m Model) renderVerticalLayout() string {
-	bordersHeight := 2
+	// bordersHeight := 0
 
 	if m.width > 150 {
 		// three column layout
-		asideWidth := min(m.width/5, 50)
+		firstColumnWidth := m.width / 5
+		secondColumnWidth := m.width / 5
+		thirdColumnWidth := m.width - firstColumnWidth - secondColumnWidth
 
-		urlsView := RenderPane("[0] Hostnames", m.urlsView.view(asideWidth, m.height-bordersHeight), asideWidth, m.height, m.focused == hostnamesPane)
-		reportsView := RenderPane("[1] Reports", m.reportsView.View(m.height-bordersHeight), asideWidth, m.height, m.focused == reportsPane)
+		urlsView := RenderPane("[0] Hostnames", m.urlsView.view(firstColumnWidth, m.height-2), firstColumnWidth, m.height-2, m.focused == hostnamesPane)
+		reportsView := RenderPane("[1] Reports", m.reportsView.View(m.height-2), secondColumnWidth, m.height-2, m.focused == reportsPane)
+		resultView := RenderPane("[2] Result", m.resultView.View(thirdColumnWidth, m.height), thirdColumnWidth, m.height, m.focused == resultPane)
 
-		sidePanelView := lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinHorizontal(lipgloss.Left, urlsView, reportsView))
-
-		resultView := RenderPane("[2] Result", m.resultView.View(m.width-asideWidth*2, m.height), m.width-asideWidth*2, m.height, m.focused == resultPane)
-		return lipgloss.JoinHorizontal(lipgloss.Top, sidePanelView, resultView)
+		return lipgloss.JoinHorizontal(lipgloss.Top, urlsView, reportsView, resultView)
 	} else {
 		// two column layout
-		asideWidth := min(m.width/3, 50)
-		hPanesCount := 2
-		spareSpace := m.height - ((m.height / hPanesCount) * hPanesCount)
+		leftPaneWidth := m.width / 3
+		leftTopPaneHeight := (m.height / 2) - 2
+		leftBottomPaneHeight := m.height - leftTopPaneHeight - 4
+		rightPaneWidth := m.width - leftPaneWidth
 
-		urlsView := RenderPane("[0] Hostnames", m.urlsView.view(asideWidth, (m.height/hPanesCount)-bordersHeight), asideWidth, m.height/2, m.focused == hostnamesPane)
-		reportsView := RenderPane("[1] Reports", m.reportsView.View((m.height/hPanesCount)+spareSpace-bordersHeight), asideWidth, (m.height/2)+spareSpace, m.focused == reportsPane)
+		urlsView := RenderPane("[0] Hostnames", m.urlsView.view(leftPaneWidth, leftTopPaneHeight), leftPaneWidth, leftTopPaneHeight, m.focused == hostnamesPane)
+		reportsView := RenderPane("[1] Reports", m.reportsView.View(leftBottomPaneHeight), leftPaneWidth, leftBottomPaneHeight, m.focused == reportsPane)
 
 		sidePanelView := lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView))
-		resultView := RenderPane("[2] Result", m.resultView.View(m.width-asideWidth, m.height), m.width-asideWidth, m.height, m.focused == resultPane)
+		resultView := RenderPane("[2] Result", m.resultView.View(rightPaneWidth, m.height), rightPaneWidth, m.height, m.focused == resultPane)
 
 		return lipgloss.JoinHorizontal(lipgloss.Top, sidePanelView, resultView)
 	}
@@ -263,7 +260,7 @@ func (m Model) renderVerticalLayout() string {
 
 const (
 	minTerminalWidth  int = 50
-	minTerminalHeight int = 50
+	minTerminalHeight int = 20
 )
 
 func (m *Model) setActivePane(pane Pane) tea.Cmd {
