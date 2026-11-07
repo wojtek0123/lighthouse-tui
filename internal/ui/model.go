@@ -10,19 +10,24 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
 
-// ActivePaneMsg is a Bubble Tea message dispatched when active pane changed.
-type ActivePaneMsg struct {
-	pane Pane
-}
-
-// Pane indicates active pane.
-type Pane int
+const (
+	minTerminalWidth  int = 50
+	minTerminalHeight int = 20
+)
 
 const (
 	hostnamesPane Pane = iota
 	reportsPane
 	resultPane
 )
+
+// Pane indicates active pane.
+type Pane int
+
+// ActivePaneMsg is a Bubble Tea message dispatched when active pane changed.
+type ActivePaneMsg struct {
+	pane Pane
+}
 
 // Model represents app main type.
 type Model struct {
@@ -185,6 +190,12 @@ func (m Model) View() tea.View {
 
 	v.AltScreen = true
 
+	if !m.ready {
+		v.Content = "Initializing lighthouse tui..."
+
+		return v
+	}
+
 	if m.error != nil {
 		v.Content = m.error.Error()
 
@@ -194,19 +205,15 @@ func (m Model) View() tea.View {
 	if m.showModal {
 		v.Content = m.modal.View(m.width, m.height)
 	} else {
-		v.Content = m.renderView()
+		v.Content = m.renderLayout()
 	}
 
 	return v
 }
 
-func (m Model) renderView() string {
-	if !m.ready {
-		return "Initializing lighthouse tui..."
-	}
-
+func (m Model) renderLayout() string {
 	if m.width < minTerminalWidth || m.height < minTerminalHeight {
-		return lipgloss.JoinHorizontal(lipgloss.Center, "Window is to small: ", strconv.Itoa(m.width), "x", strconv.Itoa(m.height))
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, lipgloss.JoinVertical(lipgloss.Center, "Window is too small", lipgloss.JoinHorizontal(lipgloss.Center, strconv.Itoa(m.width), "x", strconv.Itoa(m.height))))
 	}
 
 	if m.width > 100 {
@@ -228,8 +235,6 @@ func (m Model) renderHorizontalLayout() string {
 }
 
 func (m Model) renderVerticalLayout() string {
-	// bordersHeight := 0
-
 	if m.width > 150 {
 		// three column layout
 		firstColumnWidth := m.width / 5
@@ -241,27 +246,22 @@ func (m Model) renderVerticalLayout() string {
 		resultView := RenderPane("[2] Result", m.resultView.View(thirdColumnWidth, m.height), thirdColumnWidth, m.height, m.focused == resultPane)
 
 		return lipgloss.JoinHorizontal(lipgloss.Top, urlsView, reportsView, resultView)
-	} else {
-		// two column layout
-		leftPaneWidth := m.width / 3
-		leftTopPaneHeight := (m.height / 2) - 2
-		leftBottomPaneHeight := m.height - leftTopPaneHeight - 4
-		rightPaneWidth := m.width - leftPaneWidth
-
-		urlsView := RenderPane("[0] Hostnames", m.urlsView.view(leftPaneWidth, leftTopPaneHeight), leftPaneWidth, leftTopPaneHeight, m.focused == hostnamesPane)
-		reportsView := RenderPane("[1] Reports", m.reportsView.View(leftBottomPaneHeight), leftPaneWidth, leftBottomPaneHeight, m.focused == reportsPane)
-
-		sidePanelView := lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView))
-		resultView := RenderPane("[2] Result", m.resultView.View(rightPaneWidth, m.height), rightPaneWidth, m.height, m.focused == resultPane)
-
-		return lipgloss.JoinHorizontal(lipgloss.Top, sidePanelView, resultView)
 	}
-}
 
-const (
-	minTerminalWidth  int = 50
-	minTerminalHeight int = 20
-)
+	// two column layout
+	leftPaneWidth := m.width / 3
+	leftTopPaneHeight := (m.height / 2) - 2
+	leftBottomPaneHeight := m.height - leftTopPaneHeight - 4
+	rightPaneWidth := m.width - leftPaneWidth
+
+	urlsView := RenderPane("[0] Hostnames", m.urlsView.view(leftPaneWidth, leftTopPaneHeight), leftPaneWidth, leftTopPaneHeight, m.focused == hostnamesPane)
+	reportsView := RenderPane("[1] Reports", m.reportsView.View(leftBottomPaneHeight), leftPaneWidth, leftBottomPaneHeight, m.focused == reportsPane)
+
+	sidePanelView := lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinVertical(lipgloss.Top, urlsView, reportsView))
+	resultView := RenderPane("[2] Result", m.resultView.View(rightPaneWidth, m.height), rightPaneWidth, m.height, m.focused == resultPane)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, sidePanelView, resultView)
+}
 
 func (m *Model) setActivePane(pane Pane) tea.Cmd {
 	m.reportsView.SetActive(m.focused == reportsPane)

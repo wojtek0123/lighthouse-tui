@@ -106,7 +106,7 @@ func initReports() ([]string, error) {
 	urls, err := lighthouse.GetHostnames()
 
 	if err != nil {
-		return []string{}, err
+		return []string{}, fmt.Errorf("failed to get hostnames: %w", err)
 	}
 
 	if len(urls) == 0 {
@@ -118,7 +118,7 @@ func initReports() ([]string, error) {
 	reports, err := lighthouse.GetReports(url)
 
 	if err != nil {
-		return []string{}, nil
+		return []string{}, fmt.Errorf("failed to get reports: %w", err)
 	}
 
 	return reports, nil
