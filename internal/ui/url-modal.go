@@ -105,7 +105,7 @@ func (m URLModal) Update(msg tea.Msg) (URLModal, tea.Cmd) {
 }
 
 // View returns url modal ui.
-func (m URLModal) View(width, height int) tea.View {
+func (m URLModal) View(width, height int) string {
 	// TODO:
 	// - handle smaller resolutions
 
@@ -120,5 +120,5 @@ func (m URLModal) View(width, height int) tea.View {
 	// 	errorMsg = errMsgStyle.Render(m.err.Error())
 	// }
 
-	return tea.NewView(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, background.Render(lipgloss.JoinVertical(lipgloss.Left, "", m.input.View(), errorMsg))))
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, background.Render(lipgloss.JoinVertical(lipgloss.Left, "", m.input.View(), errorMsg)))
 }
