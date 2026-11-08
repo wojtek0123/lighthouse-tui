@@ -25,7 +25,7 @@ A blazing-fast, terminal-native interactive dashboard for auditing website perfo
 
 Before running **Lighthouse TUI**, ensure you have:
 
-- [Go](https://go.dev/) (1.21 or later)
+- [Go](https://go.dev/) (1.26 or later)
 - [Node.js](https://nodejs.org/) with `lighthouse` installed globally:
   ```bash
   npm install -g lighthouse
