@@ -249,23 +249,17 @@ func (v *ResultView) buildAudit() {
 	}
 
 	groups := slices.Collect(maps.Keys(grouped))
-	// slices.Sort(groups)
 
-	// different columns for different tab
-	// columns := []table.Column{
-	// 	{Title: "Score", Width: badgeWidth},
-	// 	{Title: "Savings", Width: 20},
-	// 	{Title: "Category", Width: 20},
-	// 	{Title: "Name", Width: v.width - 61},
-	// }
+	rows := []table.Row{}
 
 	for _, g := range groups {
 		if g == "metrics" {
 			v.metrics = grouped[g]
+			break
 		}
-	}
 
-	rows := v.buildRows(groups, grouped)
+		rows = append(rows, v.buildRows(g, grouped)...)
+	}
 
 	sort.Slice(rows, func(i, j int) bool {
 		return rows[i][0] < rows[j][0]
@@ -279,57 +273,47 @@ func (v *ResultView) buildAudit() {
 }
 
 func buildColumns(activeTab string, width int) []table.Column {
-	if activeTab == "performance" || activeTab == "agentic-browsing" {
-		return []table.Column{
-			{Title: "Score", Width: badgeWidth},
-			{Title: "Savings", Width: 20},
-			{Title: "Category", Width: 20},
-			{Title: "Name", Width: width - 61},
-		}
-	}
-
-	return []table.Column{
-		{Title: "Score", Width: badgeWidth},
+	columns := []table.Column{
+		{Title: "Status", Width: badgeWidth},
 		{Title: "Category", Width: 20},
 		{Title: "Name", Width: width - 41},
 	}
+
+	if activeTab == string(lighthouse.Performance) || activeTab == string(lighthouse.AgenticBrowsing) {
+		columns = slices.Insert(columns, 1, table.Column{Title: "Savings", Width: 20})
+		columns[3].Width = width - 61
+	}
+
+	return columns
 }
 
-func (v ResultView) buildRows(groups []string, grouped map[string][]lighthouse.AuditRefs) []table.Row {
+func (v ResultView) buildRows(group string, grouped map[string][]lighthouse.AuditRefs) []table.Row {
 	rows := []table.Row{}
 
-	for _, g := range groups {
-		// if g == "metrics" {
-		// 	v.metrics = grouped[g]
-		// }
+	if group == "hidden" || group == "" {
+		return []table.Row{}
+	}
 
-		if g == "hidden" || g == "" {
+	for _, a := range grouped[group] {
+		audit, ok := v.report.Audits[a.ID]
+
+		if !ok {
+			log.Printf("error while getting audit")
 			continue
 		}
 
-		for _, a := range grouped[g] {
-			audit, ok := v.report.Audits[a.ID]
+		row := table.Row{
+			scoreToStatus(audit.Score, audit.ScoreDisplayMode),
+			strings.TrimSpace(group),
+			strings.TrimSpace(audit.Title),
+		}
 
-			if !ok {
-				log.Printf("error while getting audit")
-				continue
-			}
+		if v.activeTab == string(lighthouse.Performance) || v.activeTab == string(lighthouse.AgenticBrowsing) {
+			row = slices.Insert(row, 1, audit.DisplayValue)
 
-			if v.activeTab == "performance" || v.activeTab == "agentic-browsing" {
-				rows = append(rows, table.Row{
-					scoreToStatus(audit.Score, audit.ScoreDisplayMode),
-					audit.DisplayValue,
-					strings.TrimSpace(g),
-					strings.TrimSpace(audit.Title),
-				})
-			} else {
-				rows = append(rows, table.Row{
-					scoreToStatus(audit.Score, audit.ScoreDisplayMode),
-					strings.TrimSpace(g),
-					strings.TrimSpace(audit.Title),
-				})
-			}
-
+			rows = append(rows, row)
+		} else {
+			rows = append(rows, row)
 		}
 
 	}
