@@ -2,6 +2,8 @@ package ui
 
 import (
 	"cmp"
+	"image/color"
+	"log"
 	"maps"
 	"slices"
 	"sort"
@@ -180,7 +182,7 @@ func (v *ResultView) refresh() {
 	}
 
 	v.tabs.SetTabs(v.categories)
-	v.buildRows()
+	v.buildAudit()
 
 	metrics := v.renderMetrics(min(v.width, 30))
 
@@ -225,7 +227,7 @@ func (v *ResultView) getTabs() {
 		return cmp.Compare(pA, pB)
 	})
 }
-func (v *ResultView) buildRows() {
+func (v *ResultView) buildAudit() {
 	// v.table = []table.Model{}
 	v.metrics = []lighthouse.AuditRefs{}
 	v.table.SetRows(nil)
@@ -247,25 +249,59 @@ func (v *ResultView) buildRows() {
 	}
 
 	groups := slices.Collect(maps.Keys(grouped))
-	slices.Sort(groups)
-
-	// scoreWidth := 25
-	// categoryWidth := min(v.width-10, v.width/3-scoreWidth-5)
+	// slices.Sort(groups)
 
 	// different columns for different tab
-	columns := []table.Column{
-		{Title: "Score", Width: 20},
-		{Title: "Savings", Width: 20},
-		{Title: "Category", Width: 20},
-		{Title: "Name", Width: v.width - 70},
-	}
-
-	rows := []table.Row{}
+	// columns := []table.Column{
+	// 	{Title: "Score", Width: badgeWidth},
+	// 	{Title: "Savings", Width: 20},
+	// 	{Title: "Category", Width: 20},
+	// 	{Title: "Name", Width: v.width - 61},
+	// }
 
 	for _, g := range groups {
 		if g == "metrics" {
 			v.metrics = grouped[g]
 		}
+	}
+
+	rows := v.buildRows(groups, grouped)
+
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i][0] < rows[j][0]
+	})
+
+	if len(rows) > 0 {
+		v.table.SetColumns(buildColumns(v.activeTab, v.width))
+		v.table.SetRows(rows)
+		v.table.SetCursor(0)
+	}
+}
+
+func buildColumns(activeTab string, width int) []table.Column {
+	if activeTab == "performance" || activeTab == "agentic-browsing" {
+		return []table.Column{
+			{Title: "Score", Width: badgeWidth},
+			{Title: "Savings", Width: 20},
+			{Title: "Category", Width: 20},
+			{Title: "Name", Width: width - 61},
+		}
+	}
+
+	return []table.Column{
+		{Title: "Score", Width: badgeWidth},
+		{Title: "Category", Width: 20},
+		{Title: "Name", Width: width - 41},
+	}
+}
+
+func (v ResultView) buildRows(groups []string, grouped map[string][]lighthouse.AuditRefs) []table.Row {
+	rows := []table.Row{}
+
+	for _, g := range groups {
+		// if g == "metrics" {
+		// 	v.metrics = grouped[g]
+		// }
 
 		if g == "hidden" || g == "" {
 			continue
@@ -274,9 +310,12 @@ func (v *ResultView) buildRows() {
 		for _, a := range grouped[g] {
 			audit, ok := v.report.Audits[a.ID]
 
-			// displayValue only in performance tab
-
 			if !ok {
+				log.Printf("error while getting audit")
+				continue
+			}
+
+			if v.activeTab == "performance" || v.activeTab == "agentic-browsing" {
 				rows = append(rows, table.Row{
 					scoreToStatus(audit.Score, audit.ScoreDisplayMode),
 					audit.DisplayValue,
@@ -286,7 +325,6 @@ func (v *ResultView) buildRows() {
 			} else {
 				rows = append(rows, table.Row{
 					scoreToStatus(audit.Score, audit.ScoreDisplayMode),
-					audit.DisplayValue,
 					strings.TrimSpace(g),
 					strings.TrimSpace(audit.Title),
 				})
@@ -296,47 +334,33 @@ func (v *ResultView) buildRows() {
 
 	}
 
-	sort.Slice(rows, func(i, j int) bool {
-		return rows[i][0] < rows[j][0]
-	})
-
-	if len(rows) > 0 {
-		v.table.SetColumns(columns)
-		v.table.SetRows(rows)
-		v.table.SetCursor(0)
-	}
+	return rows
 }
 
-func scoreToStatus(score *float64, scoreDisplayMode lighthouse.ScoreDisplayMode) string {
-	if scoreDisplayMode == lighthouse.NonApplicable {
-		return "N/A"
-	}
-
-	if scoreDisplayMode == lighthouse.Manual {
-		return lipgloss.NewStyle().Foreground(lipgloss.Yellow).Render("NEED VERIFICATION")
-	}
-
-	if scoreDisplayMode == lighthouse.Error {
-		return lipgloss.NewStyle().Foreground(lipgloss.Red).Render("AUDIT FAILED TO RUN")
-	}
-
-	if scoreDisplayMode == lighthouse.Informative {
-		return lipgloss.NewStyle().Foreground(lipgloss.Blue).Render("DIAGNOSTIC")
+func scoreToStatus(score *float64, mode lighthouse.ScoreDisplayMode) string {
+	switch mode {
+	case lighthouse.NonApplicable:
+		return badge("N/A", lipgloss.BrightBlack)
+	case lighthouse.Manual:
+		return badge("MANUAL", lipgloss.Yellow)
+	case lighthouse.Error:
+		return badge("ERROR", lipgloss.Red)
+	case lighthouse.Informative:
+		return badge("INFO", lipgloss.Blue)
 	}
 
 	if score == nil {
-		return "-"
+		return badge("-", lipgloss.BrightBlack)
 	}
 
-	if *score > 0.89 {
-		return lipgloss.NewStyle().Foreground(lipgloss.Green).Render("GOOD")
+	switch {
+	case *score > 0.89:
+		return badge("GOOD", lipgloss.Green)
+	case *score > 0.50:
+		return badge("AVERAGE", lipgloss.Yellow)
+	default:
+		return badge("POOR", lipgloss.Red)
 	}
-
-	if *score > 0.50 {
-		return lipgloss.NewStyle().Foreground(lipgloss.Yellow).Render("NEEDS IMPROVEMENT")
-	}
-
-	return lipgloss.NewStyle().Foreground(lipgloss.Red).Render("POOR")
 }
 
 const progressMaxWidth = 75
@@ -415,3 +439,13 @@ func RenderPane(header, content string, width, height int, focus bool) string {
 func (v *ResultView) SetHostname(hostname string) {
 	v.hostname = hostname
 }
+
+func badge(label string, fg color.Color) string {
+	return lipgloss.NewStyle().
+		Foreground(fg).
+		Bold(true).
+		Width(badgeWidth).
+		Render(label)
+}
+
+const badgeWidth = 11
