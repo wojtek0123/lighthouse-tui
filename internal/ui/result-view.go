@@ -73,8 +73,9 @@ type ResultView struct {
 func NewResultView() *ResultView {
 	overviewTab := NewOverviewTab()
 	tabs := components.NewTabs()
-	table := table.New()
-	table.Focus()
+	table := table.New(
+		table.WithFocused(true),
+	)
 
 	return &ResultView{
 		loaded:      false,
@@ -99,18 +100,16 @@ func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 			if !v.active {
 				return v, nil
 			}
-
 			v.tabs.Previous()
 			v.activeTab = v.categories[v.tabs.Index()]
-			// v.initAudits(80)
+			v.refresh()
 		case "]":
 			if !v.active {
 				return v, nil
 			}
-
 			v.tabs.Next()
 			v.activeTab = v.categories[v.tabs.Index()]
-			// v.initAudits(80)
+			v.refresh()
 		}
 	case ResultSizeMsg:
 		v.width = msg.width
@@ -138,7 +137,7 @@ func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 				v.report = report
 				v.loaded = true
 				v.getTabs()
-				v.table.Focus()
+				v.refresh()
 			}
 		}
 	}
@@ -156,8 +155,6 @@ func (v *ResultView) SetActiveTab(tab string) {
 
 // View returns ui of ResultView as string.
 func (v ResultView) View() string {
-	v.tabs.SetTabs(v.categories)
-
 	if !v.loaded {
 		return lipgloss.Place(
 			v.width, v.height,
@@ -167,35 +164,33 @@ func (v ResultView) View() string {
 		)
 	}
 
-	v.renderAudits()
+	parts := []string{v.tabs.View()}
+	if metrics := v.renderMetrics(min(v.width, 30)); metrics != "" {
+		parts = append(parts, metrics)
+	}
+	parts = append(parts, v.table.View())
+
+	return lipgloss.JoinVertical(lipgloss.Top, parts...)
+}
+
+// refresh rebuilds rows/metrics and sizes the table. Call it from Update only.
+func (v *ResultView) refresh() {
+	if !v.loaded {
+		return
+	}
+
+	v.tabs.SetTabs(v.categories)
+	v.buildRows()
 
 	metrics := v.renderMetrics(min(v.width, 30))
 
-	// tableHeight := v.height - lipgloss.Height(v.tabs.View()) - lipgloss.Height(metrics)
-
-	// v.table.SetWidth(v.width)
-	// v.table.SetHeight(10)
-
+	tableHeight := v.height - lipgloss.Height(v.tabs.View())
 	if metrics != "" {
-		return lipgloss.NewStyle().Margin(0, 1).Render(
-			lipgloss.JoinVertical(
-				lipgloss.Top,
-				v.tabs.View(),
-				metrics,
-				v.table.View(),
-				// baseStyle.Render(v.table.View()),
-			),
-		)
+		tableHeight -= lipgloss.Height(metrics)
 	}
 
-	return lipgloss.NewStyle().Margin(0, 1).Render(
-		lipgloss.JoinVertical(
-			lipgloss.Top,
-			v.tabs.View(),
-			v.table.View(),
-			// baseStyle.Render(v.table.View()),
-		),
-	)
+	v.table.SetWidth(v.width)
+	v.table.SetHeight(max(tableHeight, 1))
 }
 
 func (v *ResultView) getTabs() {
@@ -230,10 +225,10 @@ func (v *ResultView) getTabs() {
 		return cmp.Compare(pA, pB)
 	})
 }
-
-func (v *ResultView) renderAudits() {
+func (v *ResultView) buildRows() {
 	// v.table = []table.Model{}
 	v.metrics = []lighthouse.AuditRefs{}
+	v.table.SetRows(nil)
 
 	if v.activeTab == "overview" || v.report == nil {
 		return
@@ -254,14 +249,15 @@ func (v *ResultView) renderAudits() {
 	groups := slices.Collect(maps.Keys(grouped))
 	slices.Sort(groups)
 
-	scoreWidth := 25
-	categoryWidth := v.width/3 - scoreWidth
+	// scoreWidth := 25
+	// categoryWidth := min(v.width-10, v.width/3-scoreWidth-5)
 
 	// different columns for different tab
 	columns := []table.Column{
-		{Title: "Score", Width: scoreWidth},
-		{Title: "Category", Width: categoryWidth},
-		{Title: "Name", Width: v.width - categoryWidth},
+		{Title: "Score", Width: 20},
+		{Title: "Savings", Width: 20},
+		{Title: "Category", Width: 20},
+		{Title: "Name", Width: v.width - 70},
 	}
 
 	rows := []table.Row{}
@@ -278,21 +274,26 @@ func (v *ResultView) renderAudits() {
 		for _, a := range grouped[g] {
 			audit, ok := v.report.Audits[a.ID]
 
+			// displayValue only in performance tab
+
 			if !ok {
-				continue
+				rows = append(rows, table.Row{
+					scoreToStatus(audit.Score, audit.ScoreDisplayMode),
+					audit.DisplayValue,
+					strings.TrimSpace(g),
+					strings.TrimSpace(audit.Title),
+				})
+			} else {
+				rows = append(rows, table.Row{
+					scoreToStatus(audit.Score, audit.ScoreDisplayMode),
+					audit.DisplayValue,
+					strings.TrimSpace(g),
+					strings.TrimSpace(audit.Title),
+				})
 			}
 
-			if audit.Score == nil {
-				continue
-			}
-
-			rows = append(rows, table.Row{scoreToStatus(audit.Score, audit.ScoreDisplayMode), g, ""})
 		}
 
-	}
-
-	if len(rows) == 0 {
-		return
 	}
 
 	sort.Slice(rows, func(i, j int) bool {
@@ -300,11 +301,9 @@ func (v *ResultView) renderAudits() {
 	})
 
 	if len(rows) > 0 {
-		// v.table.SetHeight(10)
-		// v.table.SetWidth(40)
 		v.table.SetColumns(columns)
 		v.table.SetRows(rows)
-		v.table.SetWidth(v.width - 4)
+		v.table.SetCursor(0)
 	}
 }
 
@@ -407,9 +406,9 @@ func RenderPane(header, content string, width, height int, focus bool) string {
 
 	topBorder := topLeftBorder + leftDash + renderedTitle + rightDash + topRightBorder
 
-	body := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Width(width).Height(height - 1).BorderTop(false).BorderForeground(borderColor).Render(content)
+	body := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Width(width).Height(height).BorderTop(false).BorderForeground(borderColor).Render(content)
 
-	return lipgloss.NewStyle().Width(width).Height(height - 1).Render(lipgloss.JoinVertical(lipgloss.Left, topBorder, body))
+	return lipgloss.NewStyle().Width(width).Height(height).Render(lipgloss.JoinVertical(lipgloss.Left, topBorder, body))
 }
 
 // SetHostname sets which hostname is focus from HostnamesView.
