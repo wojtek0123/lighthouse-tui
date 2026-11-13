@@ -107,7 +107,7 @@ func (d hostnameItemDelegate) Render(w io.Writer, m list.Model, index int, listI
 		}
 	} else if index == m.Index() {
 		fn = func(s ...string) string {
-			return d.styles.focus.Render(lipgloss.JoinHorizontal(lipgloss.Left, ">", strings.Join(s, " ")))
+			return d.styles.focus.Render(lipgloss.JoinHorizontal(lipgloss.Left, lipgloss.NewStyle().Foreground(lipgloss.Color("170")).Render(">"), strings.Join(s, " ")))
 		}
 	}
 

@@ -1,8 +1,15 @@
 package ui
 
 import (
+	"cmp"
+	"image/color"
+	"log"
+	"maps"
+	"slices"
+	"sort"
 	"strings"
 
+	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -10,123 +17,380 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
 )
 
-// Tab represents available tabs in result view.
-type Tab int
+const progressMaxWidth = 75
+const badgeWidth = 11
 
-const (
-	overview Tab = iota
-	performance
-)
+type ProgressMetric struct {
+	label string
+	score float64
+}
 
-// ResultView represents the view model for displaying report results,
-// managing sub-tabs, and tracking interactive UI state in the TUI.
+var baseStyle = lipgloss.NewStyle().
+	BorderStyle(lipgloss.NormalBorder()).
+	BorderForeground(lipgloss.Color("240"))
+
+// LighthouseMsg is a Bubble Tea message dispatched when lighthouse report is finished.
+type LighthouseMsg struct {
+	url    string
+	result *lighthouse.Result
+	err    error
+}
+
+func getLighthouseResult(cmd *runningCmd, url string) tea.Cmd {
+	return func() tea.Msg {
+		result, err := lighthouse.RunLighthouse(cmd.ctx, url)
+
+		return LighthouseMsg{
+			url:    url,
+			result: result,
+			err:    err,
+		}
+	}
+}
+
+// ResultView represents the view model for displaying report results
 type ResultView struct {
-	activeTab Tab
+	activeTab string
 	active    bool
 
-	overviewTab    *OverviewTab
-	performanceTab *PerformanceTab
+	categories []string
 
-	err    error
-	table  table.Model
-	audits *lighthouse.Report
-	loaded bool
+	overviewTab *OverviewTab
+
+	err            error
+	report         *lighthouse.Report
+	metrics        []ProgressMetric
+	overviewScores []ProgressMetric
 
 	hostname   string
 	reportName string
 
-	tabs *components.Tabs
+	tabs       *components.Tab
+	table      table.Model
+	sortColumn int
+	ascSort    bool
+
+	width  int
+	height int
+	ready  bool
 }
 
 // NewResultView creates result view.
 func NewResultView() *ResultView {
-	t := table.New()
 	overviewTab := NewOverviewTab()
-	performanceTab := NewPerformanceTab()
 	tabs := components.NewTabs()
-	tabs.SetTabs([]string{"Overview", "Performance"})
+	table := table.New(
+		table.WithFocused(true),
+	)
 
 	return &ResultView{
-		loaded:         false,
-		table:          t,
-		overviewTab:    overviewTab,
-		activeTab:      overview,
-		performanceTab: performanceTab,
-		tabs:           tabs,
+		overviewTab: overviewTab,
+		activeTab:   "overview",
+		tabs:        tabs,
+		table:       table,
+		active:      false,
+		report:      nil,
 	}
 }
 
 // Update updates result view state.
-func (r ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
+func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "[":
+			if !v.active {
+				return v, nil
+			}
+			v.tabs.Previous()
+			v.activeTab = v.categories[v.tabs.Index()]
+			v.refresh()
+		case "]":
+			if !v.active {
+				return v, nil
+			}
+			v.tabs.Next()
+			v.activeTab = v.categories[v.tabs.Index()]
+			v.refresh()
+		}
+	case ResultSizeMsg:
+		v.width = msg.width
+		v.height = msg.height
+		// v.refresh()
 	case ActivePaneMsg:
 		active := msg.pane == resultPane
-
-		r.tabs.SetFocus(active)
-		r.active = active
-		return r, nil
+		v.tabs.SetFocus(active)
+		v.active = active
+		v.table.Focus()
+		// v.refresh()
+		return v, nil
 	case HostnameSelectedMsg:
-		r.hostname = msg.hostname
-		r.reportName = ""
-		r.loaded = false
+		v.hostname = msg.hostname
+		v.reportName = ""
 	case ReportSelectedMsg:
-		if r.hostname != "" {
-			r.reportName = msg.reportName
+		if v.hostname != "" {
+			v.reportName = msg.reportName
 
-			report, err := lighthouse.GetReport(r.hostname, r.reportName)
+			report, err := lighthouse.GetReport(v.hostname, v.reportName)
 
 			if err != nil {
-				r.err = err
+				v.err = err
 			} else {
-				r.audits = report
-				r.loaded = true
+				v.report = report
+				v.getTabs()
+				v.refresh()
 			}
 		}
 	}
 
-	if r.active {
-		r.table, cmd = r.table.Update(msg)
-		cmds = append(cmds, cmd)
+	v.table, cmd = v.table.Update(msg)
+	cmds = append(cmds, cmd)
 
-		*r.tabs, cmd = r.tabs.Update(msg)
-		cmds = append(cmds, cmd)
-	}
-
-	return r, tea.Batch(cmds...)
+	return v, tea.Batch(cmds...)
 }
 
 // SetActiveTab sets which tab is currently active.
-func (r *ResultView) SetActiveTab(index int) {
-	r.activeTab = Tab(index)
+func (v *ResultView) SetActiveTab(tab string) {
+	v.activeTab = tab
 }
 
 // View returns ui of ResultView as string.
-func (r ResultView) View(width, height int) string {
-	if r.loaded {
-		tab := ""
-
-		switch r.activeTab {
-		case overview:
-			categories := r.audits.Categories
-
-			perf := categories[lighthouse.Performance].Score
-			accessibility := categories[lighthouse.Accessibility].Score
-			seo := categories[lighthouse.SEO].Score
-			agentic := categories[lighthouse.AgenticBrowsing].Score
-			practises := categories[lighthouse.BestPractises].Score
-
-			tab = r.overviewTab.View(perf, accessibility, practises, seo, agentic, width)
-		case performance:
-			tab = r.performanceTab.View()
-		}
-
-		return lipgloss.NewStyle().Padding(0, 1).Render(lipgloss.JoinVertical(lipgloss.Top, r.tabs.View(), " ", tab))
+func (v ResultView) View() string {
+	if v.report == nil {
+		return lipgloss.Place(
+			v.width, v.height,
+			lipgloss.Center, lipgloss.Center,
+			lipgloss.NewStyle().Foreground(lipgloss.Color("245")).
+				Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics")),
+		)
 	}
 
-	return lipgloss.Place(width, height-2, lipgloss.Center, lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics")))
+	parts := []string{v.tabs.View()}
+	if metrics := renderProgressMetrics(v.metrics, min(v.width, 30)); metrics != "" {
+		parts = append(parts, "", metrics)
+	}
+	if overviewScore := renderProgressMetrics(v.overviewScores, min(v.width, 30)); overviewScore != "" {
+		parts = append(parts, overviewScore)
+	}
+	if v.activeTab != "overview" {
+		parts = append(parts, "", v.table.View())
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Top, parts...)
+}
+
+// refresh rebuilds rows/metrics and sizes the table. Call it from Update only.
+func (v *ResultView) refresh() {
+	v.tabs.SetTabs(v.categories)
+	v.buildAudit()
+
+	metrics := renderProgressMetrics(v.metrics, min(v.width, 30))
+
+	tableHeight := v.height - lipgloss.Height(v.tabs.View())
+	if metrics != "" {
+		tableHeight -= lipgloss.Height(metrics)
+	}
+
+	v.table.SetWidth(v.width)
+	v.table.SetHeight(max(tableHeight, 1))
+}
+
+func (v *ResultView) getTabs() {
+	v.categories = v.categories[:0]
+
+	for _, c := range slices.Collect(maps.Values(v.report.Categories)) {
+		v.categories = append(v.categories, c.ID)
+	}
+
+	v.categories = append(v.categories, "overview")
+
+	tabsOrder := map[string]int{
+		"overview":                         0,
+		string(lighthouse.Performance):     1,
+		string(lighthouse.Accessibility):   2,
+		string(lighthouse.BestPractises):   3,
+		string(lighthouse.SEO):             4,
+		string(lighthouse.AgenticBrowsing): 5,
+	}
+
+	slices.SortFunc(v.categories, func(a, b string) int {
+		pA, existsA := tabsOrder[a]
+		pB, existsB := tabsOrder[b]
+
+		if !existsA {
+			pA = 999
+		}
+		if !existsB {
+			pB = 999
+		}
+
+		return cmp.Compare(pA, pB)
+	})
+}
+func (v *ResultView) buildAudit() {
+	v.table.SetRows([]table.Row{})
+	v.metrics = make([]ProgressMetric, 0)
+	v.overviewScores = make([]ProgressMetric, 0)
+
+	if v.report == nil {
+		return
+	}
+
+	if v.activeTab == "overview" {
+		for _, category := range v.report.Categories {
+			v.overviewScores = append(v.overviewScores, ProgressMetric{
+				label: category.Title,
+				score: category.Score,
+			})
+
+		}
+	} else {
+		category, exists := v.report.Categories[lighthouse.CategoryID(v.activeTab)]
+
+		if !exists {
+			log.Printf("error getting category")
+			return
+		}
+
+		groupedAuditRefs := make(map[string][]lighthouse.AuditRefs)
+
+		for _, ref := range category.AuditRefs {
+			groupedAuditRefs[ref.Group] = append(groupedAuditRefs[ref.Group], ref)
+		}
+
+		rows := []table.Row{}
+
+		for group, auditRefs := range groupedAuditRefs {
+			if group == "metrics" {
+				for _, metric := range auditRefs {
+					audit, ok := v.report.Audits[metric.ID]
+
+					if !ok {
+						log.Fatal("failed to get audit metric")
+						continue
+					}
+
+					v.metrics = append(v.metrics, ProgressMetric{label: audit.Title, score: *audit.Score})
+				}
+			}
+
+			rows = append(rows, v.buildRows(group, groupedAuditRefs)...)
+		}
+
+		sort.Slice(rows, func(i, j int) bool {
+			return rows[i][0] < rows[j][0]
+		})
+
+		v.table.SetColumns(buildColumns(v.activeTab, v.width))
+		v.table.SetRows(rows)
+		v.table.SetCursor(0)
+	}
+}
+
+func buildColumns(activeTab string, width int) []table.Column {
+	columns := []table.Column{
+		{Title: "Status", Width: badgeWidth},
+		{Title: "Category", Width: 20},
+		{Title: "Name", Width: width - 41},
+	}
+
+	if activeTab == string(lighthouse.Performance) || activeTab == string(lighthouse.AgenticBrowsing) {
+		columns = slices.Insert(columns, 1, table.Column{Title: "Savings", Width: 20})
+		columns[3].Width = width - 61
+	}
+
+	return columns
+}
+
+func (v ResultView) buildRows(group string, grouped map[string][]lighthouse.AuditRefs) []table.Row {
+	rows := []table.Row{}
+
+	if group == "hidden" || group == "" {
+		return []table.Row{}
+	}
+
+	for _, a := range grouped[group] {
+		audit, ok := v.report.Audits[a.ID]
+
+		if !ok {
+			log.Printf("error while getting audit")
+			continue
+		}
+
+		score := scoreToStatus(audit.Score, audit.ScoreDisplayMode)
+
+		row := table.Row{
+			score,
+			strings.TrimSpace(group),
+			strings.TrimSpace(audit.Title),
+		}
+
+		if v.activeTab == string(lighthouse.Performance) || v.activeTab == string(lighthouse.AgenticBrowsing) {
+			row = slices.Insert(row, 1, audit.DisplayValue)
+		}
+		rows = append(rows, row)
+
+	}
+
+	return rows
+}
+
+func scoreToStatus(score *float64, mode lighthouse.ScoreDisplayMode) string {
+	switch mode {
+	case lighthouse.NonApplicable:
+		return badge("N/A", lipgloss.BrightBlack)
+	case lighthouse.Manual:
+		return badge("MANUAL", lipgloss.Yellow)
+	case lighthouse.Error:
+		return badge("ERROR", lipgloss.Red)
+	case lighthouse.Informative:
+		return badge("INFO", lipgloss.Blue)
+	}
+
+	if score == nil {
+		return badge("-", lipgloss.BrightBlack)
+	}
+
+	switch {
+	case *score > 0.89:
+		return badge("GOOD", lipgloss.Green)
+	case *score > 0.50:
+		return badge("AVERAGE", lipgloss.Yellow)
+	default:
+		return badge("POOR", lipgloss.Red)
+	}
+}
+
+func renderProgressMetrics(metrics []ProgressMetric, w int) string {
+	if len(metrics) == 0 {
+		return ""
+	}
+
+	views := []string{}
+
+	for _, metric := range metrics {
+		color := lipgloss.Red
+
+		if metric.score > 0.9 {
+			color = lipgloss.Green
+		} else if metric.score > 0.5 {
+			color = lipgloss.Yellow
+		}
+
+		p := progress.New(progress.WithColors(color))
+		p.SetWidth(min(w, progressMaxWidth))
+
+		freeSpace := 60 - lipgloss.Width(metric.label) - lipgloss.Width(p.ViewAs(metric.score))
+
+		separator := strings.Repeat(" ", freeSpace)
+
+		views = append(views, lipgloss.JoinHorizontal(lipgloss.Left, metric.label, separator, p.ViewAs(metric.score)))
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Top, views...)
 }
 
 // RenderPane renders pane with borders. Border color change based on focus state.
@@ -155,12 +419,25 @@ func RenderPane(header, content string, width, height int, focus bool) string {
 
 	topBorder := topLeftBorder + leftDash + renderedTitle + rightDash + topRightBorder
 
-	body := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Width(width).Height(height - 1).BorderTop(false).BorderForeground(borderColor).Render(content)
+	body := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Width(width).Height(height).BorderTop(false).BorderForeground(borderColor).Render(content)
 
-	return lipgloss.NewStyle().Width(width).Height(height - 1).Render(lipgloss.JoinVertical(lipgloss.Left, topBorder, body))
+	return lipgloss.NewStyle().Width(width).Height(height).Render(lipgloss.JoinVertical(lipgloss.Left, topBorder, body))
 }
 
 // SetHostname sets which hostname is focus from HostnamesView.
-func (r *ResultView) SetHostname(hostname string) {
-	r.hostname = hostname
+func (v *ResultView) SetHostname(hostname string) {
+	v.hostname = hostname
+}
+
+func badge(label string, fg color.Color) string {
+	return lipgloss.NewStyle().
+		Foreground(fg).
+		Bold(true).
+		Width(badgeWidth).
+		Render(label)
+}
+
+// SetReport sets lighthouse report.
+func (v *ResultView) SetReport(r *lighthouse.Report) {
+	v.report = r
 }
