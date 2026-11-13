@@ -14,6 +14,10 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
 
+type HostnameLoadedMsg struct {
+	urls []string
+}
+
 // HostnameSelectedMsg is a Bubble Tea message dispatched when a user selects a specific hostname from a list or menu.
 type HostnameSelectedMsg struct {
 	hostname string
@@ -125,8 +129,11 @@ type HostnamesView struct {
 	active bool
 }
 
+const defaultWidth = 20
+
 // should it return (*HostnamesView, error)?
 func newHostnamesView(active bool) *HostnamesView {
+	// move this code to Init() in model.go
 	hostnames, err := lighthouse.GetHostnames()
 
 	if err != nil {
@@ -143,15 +150,11 @@ func newHostnamesView(active bool) *HostnamesView {
 		})
 	}
 
-	const defaultWidth = 20
-
 	s := spinner.New()
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	delegate := &hostnameItemDelegate{styles: newStyles(false), focus: active, spinner: &s}
 
-	spinner := &s
-	delegate := &hostnameItemDelegate{styles: newStyles(false), focus: active, spinner: spinner}
-
-	list := list.New(items, hostnameItemDelegate{}, defaultWidth, listHeight)
+	list := list.New(items, delegate, defaultWidth, listHeight)
 	list.SetFilteringEnabled(false)
 	list.SetShowStatusBar(false)
 	list.SetShowHelp(false)
@@ -160,7 +163,7 @@ func newHostnamesView(active bool) *HostnamesView {
 	list.SetDelegate(delegate)
 
 	return &HostnamesView{list: list,
-		spinner:  spinner,
+		spinner:  &s,
 		active:   active,
 		delegate: delegate,
 	}

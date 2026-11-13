@@ -43,28 +43,25 @@ type Model struct {
 	width  int
 	height int
 
-	error error
+	layout   Layout
+	paneSize *PaneSize
+
+	err error
 }
 
 // InitialModel creates initial state of the app.
 func InitialModel() Model {
-	urls, err := lighthouse.GetHostnames()
+	hostnamesView := newHostnamesView(true)
+	resultView := NewResultView()
+	reportsView, err := NewReportsView(false)
 
 	if err != nil {
 		return Model{
-			error: err,
+			err: err,
 		}
 	}
 
-	urlsView := newHostnamesView(true)
-	resultView := NewResultView()
-	reportsView := NewReportsView(false)
 	modal := NewURLModal()
-
-	if len(urls) > 0 {
-		reportsView.GetReports(urls[0])
-		resultView.SetHostname(urls[0])
-	}
 
 	return Model{
 		urlsView:    urlsView,
@@ -78,7 +75,21 @@ func InitialModel() Model {
 
 // Init returns tea.Cmd to keep up to date others views.
 func (m Model) Init() tea.Cmd {
-	return nil
+	urls, err := lighthouse.GetHostnames()
+
+	if err != nil {
+		return ThrowError(err)
+	}
+
+	if len(urls) == 0 {
+		return nil
+	}
+
+	return func() tea.Msg {
+		return HostnameSelectedMsg{
+			hostname: urls[0],
+		}
+	}
 }
 
 // Update is running in loop to keep state up to date.
@@ -120,16 +131,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focused = resultPane
 			return m, m.setActivePane(resultPane)
 		}
+	case errMsg:
+		m.err = msg.err
+		return m, nil
 	case CloseModalMsg:
 		m.showModal = false
 		return m, nil
 	case EnteredURLMsg:
 		ctx, cancel := context.WithCancel(context.Background())
-
 		cmd := &runningCmd{ctx: ctx, cancel: cancel}
-
 		u, err := url.Parse(msg.URL)
+
 		if err != nil {
+			m.err = err
 			return m, nil
 		}
 
@@ -146,13 +160,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		m.resultView.loaded = true
-
-		cmds = append(cmds, stopLoading(&m.urlsView.list, msg.url))
-
+		m.resultView.SetReport(msg.result.Report)
+		cmds = append(cmds, stopLoading(&m.hostnamesView.list, msg.url))
 		u, err := url.Parse(msg.url)
 
 		if err != nil {
+			m.err = err
 			return m, nil
 		}
 
@@ -196,8 +209,11 @@ func (m Model) View() tea.View {
 		return v
 	}
 
-	if m.error != nil {
-		v.Content = m.error.Error()
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+
+	if m.err != nil {
+		v.SetContent(m.err.Error())
 
 		return v
 	}

@@ -60,13 +60,14 @@ type Report struct {
 }
 
 // RunLighthouse starts lighthouse command in headless mode to get report for specific website.
-func RunLighthouse(ctx context.Context, target string) (*Result, error) {
+func RunLighthouse(ctx context.Context, enteredUrl string) (*Result, error) {
 	cmd := exec.CommandContext(
 		ctx,
 		"npx",
 		"lighthouse",
-		target,
+		enteredUrl,
 		"--quiet",
+		"--output-path=stdout",
 		"--output=json",
 		"--chrome-flags=--headless=new",
 	) // #nosec G204
@@ -86,12 +87,11 @@ func RunLighthouse(ctx context.Context, target string) (*Result, error) {
 	output, err := cmd.Output()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to get lighthouse report for %s: %w", target, err)
+		return nil, fmt.Errorf("failed to get lighthouse report for %s: %w", enteredUrl, err)
 	}
 
 	filename := reportName()
-
-	path, err := reportPath(target, filename)
+	path, err := reportPath(enteredUrl, filename)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get path to save report: %w", err)
