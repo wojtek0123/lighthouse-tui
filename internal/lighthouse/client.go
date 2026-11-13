@@ -67,6 +67,7 @@ func RunLighthouse(ctx context.Context, target string) (*Result, error) {
 		"lighthouse",
 		target,
 		"--quiet",
+		"--output-path=stdout",
 		"--output=json",
 		"--chrome-flags=--headless=new",
 	) // #nosec G204
@@ -90,8 +91,7 @@ func RunLighthouse(ctx context.Context, target string) (*Result, error) {
 	}
 
 	filename := reportName()
-
-	path, err := reportPath(target, filename)
+	path, err := reportPath(url, filename)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get path to save report: %w", err)

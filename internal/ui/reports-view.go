@@ -66,40 +66,37 @@ func (d reportItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 	}
 }
 
-// it should return (*ReportsView, error)?
+const defaultListWidth = 20
 
 // NewReportsView creates a ReportView.
-func NewReportsView(active bool) *ReportsView {
+func NewReportsView(active bool) (*ReportsView, error) {
 	reports, err := initReports()
-
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("init reports: %w", err)
 	}
 
-	items := []list.Item{}
-
+	items := make([]list.Item, 0, len(reports))
 	for _, report := range reports {
-		items = append(items, ReportItem{
-			filename: report,
-		})
+		items = append(items, ReportItem{filename: report})
 	}
 
-	list := list.New(items, reportItemDelegate{}, 20, listHeight)
+	delegate := &reportItemDelegate{
+		styles: newStyles(false),
+		focus:  active,
+	}
 
-	delegate := &reportItemDelegate{styles: newStyles(false), focus: active}
-
-	list.SetFilteringEnabled(false)
-	list.SetShowStatusBar(false)
-	list.SetShowHelp(false)
-	list.SetDelegate(delegate)
-	list.SetShowTitle(false)
-	list.SetShowPagination(false)
+	l := list.New(items, delegate, defaultListWidth, listHeight)
+	l.SetFilteringEnabled(false)
+	l.SetShowStatusBar(false)
+	l.SetShowHelp(false)
+	l.SetShowTitle(false)
+	l.SetShowPagination(false)
 
 	return &ReportsView{
-		list:     list,
+		list:     l,
 		delegate: delegate,
 		active:   active,
-	}
+	}, nil
 }
 
 func initReports() ([]string, error) {
@@ -209,6 +206,11 @@ func (v *ReportsView) InsertReport(reportName string) tea.Cmd {
 func (v *ReportsView) SetActive(active bool) {
 	v.active = active
 	v.delegate.focus = active
+}
+
+// SetSize sets size of the list.
+func (v *ReportsView) SetSize(w, h int) {
+	v.list.SetSize(w, h)
 }
 
 // ReportSelectedMsg represents a name of the selected report.
