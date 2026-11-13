@@ -17,6 +17,9 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
 )
 
+const progressMaxWidth = 75
+const badgeWidth = 11
+
 var baseStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
 	BorderForeground(lipgloss.Color("240"))
@@ -52,7 +55,6 @@ type ResultView struct {
 	err     error
 	report  *lighthouse.Report
 	metrics []lighthouse.AuditRefs
-	loaded  bool
 
 	hostname   string
 	reportName string
@@ -61,10 +63,6 @@ type ResultView struct {
 	table      table.Model
 	sortColumn int
 	ascSort    bool
-
-	progressBars []progress.Model
-	// viewport     viewport.Model
-	cursor int
 
 	width  int
 	height int
@@ -80,13 +78,12 @@ func NewResultView() *ResultView {
 	)
 
 	return &ResultView{
-		loaded:      false,
 		overviewTab: overviewTab,
 		activeTab:   "overview",
 		tabs:        tabs,
-		cursor:      0,
 		table:       table,
 		active:      false,
+		report:      nil,
 	}
 }
 
@@ -116,17 +113,17 @@ func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 	case ResultSizeMsg:
 		v.width = msg.width
 		v.height = msg.height
-		return v, nil
+		// v.refresh()
 	case ActivePaneMsg:
 		active := msg.pane == resultPane
 		v.tabs.SetFocus(active)
 		v.active = active
 		v.table.Focus()
+		v.refresh()
 		return v, nil
 	case HostnameSelectedMsg:
 		v.hostname = msg.hostname
 		v.reportName = ""
-		v.loaded = false
 	case ReportSelectedMsg:
 		if v.hostname != "" {
 			v.reportName = msg.reportName
@@ -137,7 +134,6 @@ func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 				v.err = err
 			} else {
 				v.report = report
-				v.loaded = true
 				v.getTabs()
 				v.refresh()
 			}
@@ -157,7 +153,7 @@ func (v *ResultView) SetActiveTab(tab string) {
 
 // View returns ui of ResultView as string.
 func (v ResultView) View() string {
-	if !v.loaded {
+	if v.report == nil {
 		return lipgloss.Place(
 			v.width, v.height,
 			lipgloss.Center, lipgloss.Center,
@@ -168,19 +164,15 @@ func (v ResultView) View() string {
 
 	parts := []string{v.tabs.View()}
 	if metrics := v.renderMetrics(min(v.width, 30)); metrics != "" {
-		parts = append(parts, metrics)
+		parts = append(parts, "", metrics)
 	}
-	parts = append(parts, v.table.View())
+	parts = append(parts, "", v.table.View())
 
 	return lipgloss.JoinVertical(lipgloss.Top, parts...)
 }
 
 // refresh rebuilds rows/metrics and sizes the table. Call it from Update only.
 func (v *ResultView) refresh() {
-	if !v.loaded {
-		return
-	}
-
 	v.tabs.SetTabs(v.categories)
 	v.buildAudit()
 
@@ -228,7 +220,6 @@ func (v *ResultView) getTabs() {
 	})
 }
 func (v *ResultView) buildAudit() {
-	// v.table = []table.Model{}
 	v.metrics = []lighthouse.AuditRefs{}
 	v.table.SetRows(nil)
 
@@ -238,24 +229,24 @@ func (v *ResultView) buildAudit() {
 
 	catID := lighthouse.CategoryID(v.activeTab)
 	category, exists := v.report.Categories[catID]
+
 	if !exists {
 		return
 	}
 
 	grouped := make(map[string][]lighthouse.AuditRefs)
+
 	for _, ref := range category.AuditRefs {
 		groupKey := ref.Group
 		grouped[groupKey] = append(grouped[groupKey], ref)
 	}
 
 	groups := slices.Collect(maps.Keys(grouped))
-
 	rows := []table.Row{}
 
 	for _, g := range groups {
 		if g == "metrics" {
 			v.metrics = grouped[g]
-			break
 		}
 
 		rows = append(rows, v.buildRows(g, grouped)...)
@@ -265,11 +256,9 @@ func (v *ResultView) buildAudit() {
 		return rows[i][0] < rows[j][0]
 	})
 
-	if len(rows) > 0 {
-		v.table.SetColumns(buildColumns(v.activeTab, v.width))
-		v.table.SetRows(rows)
-		v.table.SetCursor(0)
-	}
+	v.table.SetColumns(buildColumns(v.activeTab, v.width))
+	v.table.SetRows(rows)
+	v.table.SetCursor(0)
 }
 
 func buildColumns(activeTab string, width int) []table.Column {
@@ -346,8 +335,6 @@ func scoreToStatus(score *float64, mode lighthouse.ScoreDisplayMode) string {
 		return badge("POOR", lipgloss.Red)
 	}
 }
-
-const progressMaxWidth = 75
 
 func (v ResultView) renderMetrics(width int) string {
 	views := []string{}
@@ -432,4 +419,7 @@ func badge(label string, fg color.Color) string {
 		Render(label)
 }
 
-const badgeWidth = 11
+// SetReport sets lighthouse report.
+func (v *ResultView) SetReport(r *lighthouse.Report) {
+	v.report = r
+}

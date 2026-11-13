@@ -175,9 +175,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		m.resultView.report = msg.result.Report
-		m.resultView.loaded = true
-
+		m.resultView.SetReport(msg.result.Report)
 		cmds = append(cmds, stopLoading(&m.hostnamesView.list, msg.url))
 
 		u, err := url.Parse(msg.url)
