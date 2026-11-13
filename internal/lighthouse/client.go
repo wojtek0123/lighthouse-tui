@@ -66,11 +66,11 @@ type Report struct {
 		Score            *float64         `json:"score"`
 		ScoreDisplayMode ScoreDisplayMode `json:"scoreDisplayMode"`
 	} `json:"audits"`
-	Categories map[CategoryID]Categories
+	Categories map[CategoryID]Category
 }
 
-// Categories represents specific category structure.
-type Categories struct {
+// Category represents specific category structure.
+type Category struct {
 	Title     string  `json:"title"`
 	ID        string  `json:"id"`
 	Score     float64 `json:"score"`

@@ -20,6 +20,11 @@ import (
 const progressMaxWidth = 75
 const badgeWidth = 11
 
+type ProgressMetric struct {
+	label string
+	score float64
+}
+
 var baseStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
 	BorderForeground(lipgloss.Color("240"))
@@ -52,9 +57,10 @@ type ResultView struct {
 
 	overviewTab *OverviewTab
 
-	err     error
-	report  *lighthouse.Report
-	metrics []lighthouse.AuditRefs
+	err            error
+	report         *lighthouse.Report
+	metrics        []ProgressMetric
+	overviewScores []ProgressMetric
 
 	hostname   string
 	reportName string
@@ -119,7 +125,7 @@ func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 		v.tabs.SetFocus(active)
 		v.active = active
 		v.table.Focus()
-		v.refresh()
+		// v.refresh()
 		return v, nil
 	case HostnameSelectedMsg:
 		v.hostname = msg.hostname
@@ -163,10 +169,15 @@ func (v ResultView) View() string {
 	}
 
 	parts := []string{v.tabs.View()}
-	if metrics := v.renderMetrics(min(v.width, 30)); metrics != "" {
+	if metrics := renderProgressMetrics(v.metrics, min(v.width, 30)); metrics != "" {
 		parts = append(parts, "", metrics)
 	}
-	parts = append(parts, "", v.table.View())
+	if overviewScore := renderProgressMetrics(v.overviewScores, min(v.width, 30)); overviewScore != "" {
+		parts = append(parts, overviewScore)
+	}
+	if v.activeTab != "overview" {
+		parts = append(parts, "", v.table.View())
+	}
 
 	return lipgloss.JoinVertical(lipgloss.Top, parts...)
 }
@@ -176,7 +187,7 @@ func (v *ResultView) refresh() {
 	v.tabs.SetTabs(v.categories)
 	v.buildAudit()
 
-	metrics := v.renderMetrics(min(v.width, 30))
+	metrics := renderProgressMetrics(v.metrics, min(v.width, 30))
 
 	tableHeight := v.height - lipgloss.Height(v.tabs.View())
 	if metrics != "" {
@@ -220,45 +231,63 @@ func (v *ResultView) getTabs() {
 	})
 }
 func (v *ResultView) buildAudit() {
-	v.metrics = []lighthouse.AuditRefs{}
-	v.table.SetRows(nil)
+	v.table.SetRows([]table.Row{})
+	v.metrics = make([]ProgressMetric, 0)
+	v.overviewScores = make([]ProgressMetric, 0)
 
-	if v.activeTab == "overview" || v.report == nil {
+	if v.report == nil {
 		return
 	}
 
-	catID := lighthouse.CategoryID(v.activeTab)
-	category, exists := v.report.Categories[catID]
+	if v.activeTab == "overview" {
+		for _, category := range v.report.Categories {
+			v.overviewScores = append(v.overviewScores, ProgressMetric{
+				label: category.Title,
+				score: category.Score,
+			})
 
-	if !exists {
-		return
-	}
+		}
+	} else {
+		category, exists := v.report.Categories[lighthouse.CategoryID(v.activeTab)]
 
-	grouped := make(map[string][]lighthouse.AuditRefs)
-
-	for _, ref := range category.AuditRefs {
-		groupKey := ref.Group
-		grouped[groupKey] = append(grouped[groupKey], ref)
-	}
-
-	groups := slices.Collect(maps.Keys(grouped))
-	rows := []table.Row{}
-
-	for _, g := range groups {
-		if g == "metrics" {
-			v.metrics = grouped[g]
+		if !exists {
+			log.Printf("error getting category")
+			return
 		}
 
-		rows = append(rows, v.buildRows(g, grouped)...)
+		groupedAuditRefs := make(map[string][]lighthouse.AuditRefs)
+
+		for _, ref := range category.AuditRefs {
+			groupedAuditRefs[ref.Group] = append(groupedAuditRefs[ref.Group], ref)
+		}
+
+		rows := []table.Row{}
+
+		for group, auditRefs := range groupedAuditRefs {
+			if group == "metrics" {
+				for _, metric := range auditRefs {
+					audit, ok := v.report.Audits[metric.ID]
+
+					if !ok {
+						log.Fatal("failed to get audit metric")
+						continue
+					}
+
+					v.metrics = append(v.metrics, ProgressMetric{label: audit.Title, score: *audit.Score})
+				}
+			}
+
+			rows = append(rows, v.buildRows(group, groupedAuditRefs)...)
+		}
+
+		sort.Slice(rows, func(i, j int) bool {
+			return rows[i][0] < rows[j][0]
+		})
+
+		v.table.SetColumns(buildColumns(v.activeTab, v.width))
+		v.table.SetRows(rows)
+		v.table.SetCursor(0)
 	}
-
-	sort.Slice(rows, func(i, j int) bool {
-		return rows[i][0] < rows[j][0]
-	})
-
-	v.table.SetColumns(buildColumns(v.activeTab, v.width))
-	v.table.SetRows(rows)
-	v.table.SetCursor(0)
 }
 
 func buildColumns(activeTab string, width int) []table.Column {
@@ -291,19 +320,18 @@ func (v ResultView) buildRows(group string, grouped map[string][]lighthouse.Audi
 			continue
 		}
 
+		score := scoreToStatus(audit.Score, audit.ScoreDisplayMode)
+
 		row := table.Row{
-			scoreToStatus(audit.Score, audit.ScoreDisplayMode),
+			score,
 			strings.TrimSpace(group),
 			strings.TrimSpace(audit.Title),
 		}
 
 		if v.activeTab == string(lighthouse.Performance) || v.activeTab == string(lighthouse.AgenticBrowsing) {
 			row = slices.Insert(row, 1, audit.DisplayValue)
-
-			rows = append(rows, row)
-		} else {
-			rows = append(rows, row)
 		}
+		rows = append(rows, row)
 
 	}
 
@@ -336,40 +364,30 @@ func scoreToStatus(score *float64, mode lighthouse.ScoreDisplayMode) string {
 	}
 }
 
-func (v ResultView) renderMetrics(width int) string {
-	views := []string{}
-
-	if len(v.metrics) == 0 {
+func renderProgressMetrics(metrics []ProgressMetric, w int) string {
+	if len(metrics) == 0 {
 		return ""
 	}
 
-	for _, metric := range v.metrics {
-		audit, ok := v.report.Audits[metric.ID]
+	views := []string{}
 
-		if !ok {
-			continue
-		}
-
-		if audit.Score == nil {
-			continue
-		}
-
+	for _, metric := range metrics {
 		color := lipgloss.Red
 
-		if *audit.Score > 0.9 {
+		if metric.score > 0.9 {
 			color = lipgloss.Green
-		} else if *audit.Score > 0.5 {
+		} else if metric.score > 0.5 {
 			color = lipgloss.Yellow
 		}
 
 		p := progress.New(progress.WithColors(color))
-		p.SetWidth(min(width, progressMaxWidth))
+		p.SetWidth(min(w, progressMaxWidth))
 
-		freeSpace := 60 - lipgloss.Width(audit.Title) - lipgloss.Width(p.ViewAs(*audit.Score))
+		freeSpace := 60 - lipgloss.Width(metric.label) - lipgloss.Width(p.ViewAs(metric.score))
 
 		separator := strings.Repeat(" ", freeSpace)
 
-		views = append(views, lipgloss.JoinHorizontal(lipgloss.Left, audit.Title, separator, p.ViewAs(*audit.Score)))
+		views = append(views, lipgloss.JoinHorizontal(lipgloss.Left, metric.label, separator, p.ViewAs(metric.score)))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Top, views...)
