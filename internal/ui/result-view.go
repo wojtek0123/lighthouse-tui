@@ -20,6 +20,20 @@ import (
 const progressMaxWidth = 75
 const badgeWidth = 11
 
+type status string
+type tab string
+
+const (
+	nonApplicableStatus status = "N/A"
+	manualStatus        status = "MANUAL"
+	errorStatus         status = "Error"
+	informativeStatus   status = "INFO"
+	goodStatus          status = "GOOD"
+	poorStatus          status = "POOR"
+	averageStatus       status = "AVERAGE"
+	nilStatus           status = "-"
+)
+
 type ProgressMetric struct {
 	label string
 	score float64
@@ -55,8 +69,6 @@ type ResultView struct {
 
 	categories []string
 
-	overviewTab *OverviewTab
-
 	err            error
 	report         *lighthouse.Report
 	metrics        []ProgressMetric
@@ -77,19 +89,17 @@ type ResultView struct {
 
 // NewResultView creates result view.
 func NewResultView() *ResultView {
-	overviewTab := NewOverviewTab()
 	tabs := components.NewTabs()
 	table := table.New(
 		table.WithFocused(true),
 	)
 
 	return &ResultView{
-		overviewTab: overviewTab,
-		activeTab:   "overview",
-		tabs:        tabs,
-		table:       table,
-		active:      false,
-		report:      nil,
+		activeTab: "performance",
+		tabs:      tabs,
+		table:     table,
+		active:    false,
+		report:    nil,
 	}
 }
 
@@ -119,7 +129,7 @@ func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 	case ResultSizeMsg:
 		v.width = msg.width
 		v.height = msg.height
-		// v.refresh()
+		v.refresh()
 	case ActivePaneMsg:
 		active := msg.pane == resultPane
 		v.tabs.SetFocus(active)
@@ -170,14 +180,12 @@ func (v ResultView) View() string {
 
 	parts := []string{v.tabs.View()}
 	if metrics := renderProgressMetrics(v.metrics, min(v.width, 30)); metrics != "" {
-		parts = append(parts, "", metrics)
+		parts = append(parts, metrics)
 	}
 	if overviewScore := renderProgressMetrics(v.overviewScores, min(v.width, 30)); overviewScore != "" {
 		parts = append(parts, overviewScore)
 	}
-	if v.activeTab != "overview" {
-		parts = append(parts, "", v.table.View())
-	}
+	parts = append(parts, v.table.View())
 
 	return lipgloss.JoinVertical(lipgloss.Top, parts...)
 }
@@ -205,15 +213,12 @@ func (v *ResultView) getTabs() {
 		v.categories = append(v.categories, c.ID)
 	}
 
-	v.categories = append(v.categories, "overview")
-
 	tabsOrder := map[string]int{
-		"overview":                         0,
-		string(lighthouse.Performance):     1,
-		string(lighthouse.Accessibility):   2,
-		string(lighthouse.BestPractises):   3,
-		string(lighthouse.SEO):             4,
-		string(lighthouse.AgenticBrowsing): 5,
+		string(lighthouse.Performance):     0,
+		string(lighthouse.Accessibility):   1,
+		string(lighthouse.BestPractises):   2,
+		string(lighthouse.SEO):             3,
+		string(lighthouse.AgenticBrowsing): 4,
 	}
 
 	slices.SortFunc(v.categories, func(a, b string) int {
@@ -341,26 +346,26 @@ func (v ResultView) buildRows(group string, grouped map[string][]lighthouse.Audi
 func scoreToStatus(score *float64, mode lighthouse.ScoreDisplayMode) string {
 	switch mode {
 	case lighthouse.NonApplicable:
-		return badge("N/A", lipgloss.BrightBlack)
+		return badge(nonApplicableStatus, lipgloss.BrightBlack)
 	case lighthouse.Manual:
-		return badge("MANUAL", lipgloss.Yellow)
+		return badge(manualStatus, lipgloss.Yellow)
 	case lighthouse.Error:
-		return badge("ERROR", lipgloss.Red)
+		return badge(errorStatus, lipgloss.Red)
 	case lighthouse.Informative:
-		return badge("INFO", lipgloss.Blue)
+		return badge(informativeStatus, lipgloss.Blue)
 	}
 
 	if score == nil {
-		return badge("-", lipgloss.BrightBlack)
+		return badge(nilStatus, lipgloss.BrightBlack)
 	}
 
 	switch {
 	case *score > 0.89:
-		return badge("GOOD", lipgloss.Green)
+		return badge(goodStatus, lipgloss.Green)
 	case *score > 0.50:
-		return badge("AVERAGE", lipgloss.Yellow)
+		return badge(averageStatus, lipgloss.Yellow)
 	default:
-		return badge("POOR", lipgloss.Red)
+		return badge(poorStatus, lipgloss.Red)
 	}
 }
 
@@ -429,12 +434,12 @@ func (v *ResultView) SetHostname(hostname string) {
 	v.hostname = hostname
 }
 
-func badge(label string, fg color.Color) string {
+func badge(s status, fg color.Color) string {
 	return lipgloss.NewStyle().
 		Foreground(fg).
 		Bold(true).
 		Width(badgeWidth).
-		Render(label)
+		Render(string(s))
 }
 
 // SetReport sets lighthouse report.

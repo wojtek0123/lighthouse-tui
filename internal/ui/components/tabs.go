@@ -34,7 +34,7 @@ func (t *Tab) View() string {
 		}
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Left, strings.Join(tabs, " "))
+	return lipgloss.JoinHorizontal(lipgloss.Left, "", strings.Join(tabs, " "))
 }
 
 // SetTabs sets available tabs.
