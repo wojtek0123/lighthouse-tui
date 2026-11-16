@@ -333,24 +333,22 @@ func scoreToStatus(score *float64, mode lighthouse.ScoreDisplayMode) string {
 		return badge(errorStatus, lipgloss.Red)
 	case lighthouse.Informative:
 		return badge(informativeStatus, lipgloss.Blue)
-	case lighthouse.Binary:
-	case lighthouse.MetricSavings:
-	case lighthouse.Numeric:
+	case lighthouse.Binary, lighthouse.MetricSavings, lighthouse.Numeric:
 		if score == nil {
 			return badge(nilStatus, lipgloss.BrightBlack)
 		}
 
 		switch {
-		case *score > 0.89:
+		case *score >= 0.9:
 			return badge(goodStatus, lipgloss.Green)
-		case *score > 0.50:
+		case *score >= 0.5:
 			return badge(averageStatus, lipgloss.Yellow)
 		default:
 			return badge(poorStatus, lipgloss.Red)
 		}
+	default:
+		return badge(nilStatus, lipgloss.BrightBlack)
 	}
-
-	return ""
 }
 
 func renderProgressMetrics(metrics []progressMetric, w int) string {
