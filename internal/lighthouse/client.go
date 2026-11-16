@@ -16,20 +16,24 @@ import (
 
 const appName string = "lighthouse-tui"
 
-// Category represents core web vitals categories in lighthouse report.
-type Category string
+// CategoryID represents core web vitals category ID in lighthouse report.
+type CategoryID string
 
 const (
 	// Performance represents performance category in lighthouse report.
-	Performance Category = "performance"
+	Performance CategoryID = "performance"
+
 	// Accessibility represents accessibility category in lighthouse report.
-	Accessibility Category = "accessibility"
+	Accessibility CategoryID = "accessibility"
+
 	// BestPractises represents best practises category in lighthouse report.
-	BestPractises Category = "best-practices"
+	BestPractises CategoryID = "best-practices"
+
 	// SEO represents seo category in lighthouse report.
-	SEO Category = "seo"
+	SEO CategoryID = "seo"
+
 	// AgenticBrowsing represents agentic browsing category in lighthouse report.
-	AgenticBrowsing Category = "agentic-browsing"
+	AgenticBrowsing CategoryID = "agentic-browsing"
 )
 
 // Result represents report of lighthouse package and report name.
@@ -38,7 +42,31 @@ type Result struct {
 	ReportName string
 }
 
-// check if lightyhouse version is supported.
+// ScoreDisplayMode specifies how a score or metric result is rendered in the UI.
+type ScoreDisplayMode string
+
+const (
+	// MetricSavings displays the score formatted as calculated metric savings.
+	MetricSavings ScoreDisplayMode = "metricSavings"
+
+	// NonApplicable indicates that the score does not apply to the current context.
+	NonApplicable ScoreDisplayMode = "notApplicable"
+
+	// Informative presents the score as contextual information rather than a numerical grade.
+	Informative ScoreDisplayMode = "informative"
+
+	// Numeric displays the score as a quantitative numerical value.
+	Numeric ScoreDisplayMode = "numeric"
+
+	// Binary displays the score as a simple pass/fail or true/false outcome.
+	Binary ScoreDisplayMode = "binary"
+
+	// Manual indicates that the score requires manual evaluation or visual entry.
+	Manual ScoreDisplayMode = "manual"
+
+	// Error indicates that an error occurred while calculating or displaying the score.
+	Error ScoreDisplayMode = "error"
+)
 
 // Report represents lighthouse reports in json format.
 type Report struct {
@@ -46,26 +74,57 @@ type Report struct {
 	LighthouseVersion string `json:"lighthouseVersion"`
 	Audits            map[string]struct {
 		NumericValue float64 `json:"numericValue"`
-		DisplayValue string  `json:"displayValue"`
-		Title        string  `json:"title"`
-		Description  string  `json:"description"`
-		Unit         string  `json:"numericUnit"`
-		Score        float64 `json:"score"`
+
+		DisplayValue     string           `json:"displayValue"`
+		Title            string           `json:"title"`
+		Description      string           `json:"description"`
+		Unit             string           `json:"numericUnit"`
+		Score            *float64         `json:"score"`
+		ScoreDisplayMode ScoreDisplayMode `json:"scoreDisplayMode"`
 	} `json:"audits"`
-	Categories map[Category]struct {
-		Title string  `json:"title"`
-		ID    string  `json:"id"`
-		Score float64 `json:"score"`
-	}
+	Categories map[CategoryID]Category
 }
 
+// Category represents specific category structure.
+type Category struct {
+	Title     string  `json:"title"`
+	ID        string  `json:"id"`
+	Score     float64 `json:"score"`
+	AuditRefs []AuditRefs
+}
+
+// AuditRefs represents available audits for category.
+type AuditRefs struct {
+	ID      string  `json:"id"`
+	Weight  float64 `json:"weight"`
+	Group   string  `json:"group"`
+	Acronym string  `json:"acronym"`
+}
+
+// AuditGroup represents the category of audit logging or diagnostics grouping.
+type AuditGroup string
+
+const (
+	// MetricsGroup identifies audit events related to performance and operational metrics.
+	MetricsGroup AuditGroup = "metrics"
+
+	// InsightGroup identifies audit events related to high-level system insights and analytics.
+	InsightGroup AuditGroup = "insight"
+
+	// DiagnosticsGroup identifies audit events used for technical troubleshooting and diagnostics.
+	DiagnosticsGroup AuditGroup = "diagnostics"
+
+	// HiddenGroup identifies audit events that are internal or hidden from standard user views.
+	HiddenGroup AuditGroup = "hidden"
+)
+
 // RunLighthouse starts lighthouse command in headless mode to get report for specific website.
-func RunLighthouse(ctx context.Context, target string) (*Result, error) {
+func RunLighthouse(ctx context.Context, url string) (*Result, error) {
 	cmd := exec.CommandContext(
 		ctx,
 		"npx",
 		"lighthouse",
-		target,
+		url,
 		"--quiet",
 		"--output=json",
 		"--chrome-flags=--headless=new",
@@ -86,12 +145,12 @@ func RunLighthouse(ctx context.Context, target string) (*Result, error) {
 	output, err := cmd.Output()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to get lighthouse report for %s: %w", target, err)
+		return nil, fmt.Errorf("failed to get lighthouse report for %s: %w", url, err)
 	}
 
 	filename := reportName()
 
-	path, err := reportPath(target, filename)
+	path, err := reportPath(url, filename)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get path to save report: %w", err)
