@@ -57,7 +57,7 @@ func (t *Tab) SetFocus(focus bool) {
 	t.focus = focus
 }
 
-// Next changes tab index to next
+// Next changes tab index to next.
 func (t *Tab) Next() {
 	if t.index == len(t.items)-1 {
 		t.index = 0
@@ -66,7 +66,7 @@ func (t *Tab) Next() {
 	}
 }
 
-// Previous changes tab index to previous
+// Previous changes tab index to previous.
 func (t *Tab) Previous() {
 	if t.index == 0 {
 		t.index = len(t.items) - 1
@@ -75,6 +75,7 @@ func (t *Tab) Previous() {
 	}
 }
 
+// Index returns index of active tab.
 func (t Tab) Index() int {
 	return t.index
 }

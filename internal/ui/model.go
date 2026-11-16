@@ -24,25 +24,31 @@ const (
 // Pane indicates active pane.
 type Pane int
 
+// ResultSizeMsg is a Bubble Tea message dispatched when result view size is changed.
+type ResultSizeMsg struct {
+	width, height int
+}
+
 // ActivePaneMsg is a Bubble Tea message dispatched when active pane changed.
 type ActivePaneMsg struct {
 	pane Pane
 }
 
+// Layout represents structure of app view.
 type Layout string
 
 const (
-	// DualColumn: 2 columns total (Sidebar with stacked lists + Main result view).
+	// DualColumn 2 columns total (Sidebar with stacked lists + Main result view).
 	DualColumn Layout = "dual-column"
 
-	// TripleColumn: 3 columns total (Hostname column + Report column + Result view column).
+	// TripleColumn 3 columns total (Hostname column + Report column + Result view column).
 	TripleColumn Layout = "triple-column"
 
-	// SingleColumn: 1 column total (All elements stacked vertically for mobile/narrow viewports).
+	// SingleColumn 1 column total (All elements stacked vertically for mobile/narrow viewports).
 	SingleColumn Layout = "single-column"
 )
 
-type PaneSize struct {
+type paneSize struct {
 	reportListWidth,
 	reportListHeight,
 	hostnameListWidth,
@@ -66,7 +72,7 @@ type Model struct {
 	height int
 
 	layout   Layout
-	paneSize *PaneSize
+	paneSize *paneSize
 
 	error error
 }
@@ -193,7 +199,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ready = true
 		m.width = msg.Width
 		m.height = msg.Height
-		m.calculatePanesSize()
+		m.layout, m.paneSize = calculatePanesSize(msg.Width, msg.Height)
 
 		return m, m.updateResultSize()
 	}
@@ -277,58 +283,48 @@ func (m *Model) setActivePane(pane Pane) tea.Cmd {
 	}
 }
 
-func (m *Model) calculatePanesSize() {
-	if m.width > 150 {
-		m.layout = TripleColumn
+func calculatePanesSize(w, h int) (Layout, *paneSize) {
+	if w > 150 {
+		firstColumnWidth := w / 5
+		secondColumnWidth := w / 5
+		thirdColumnWidth := w - firstColumnWidth - secondColumnWidth
 
-		firstColumnWidth := m.width / 5
-		secondColumnWidth := m.width / 5
-		thirdColumnWidth := m.width - firstColumnWidth - secondColumnWidth
-
-		m.paneSize = &PaneSize{
+		return TripleColumn, &paneSize{
 			hostnameListWidth:  firstColumnWidth,
-			hostnameListHeight: m.height - 2,
+			hostnameListHeight: h - 2,
 			reportListWidth:    secondColumnWidth,
-			reportListHeight:   m.height - 2,
+			reportListHeight:   h - 2,
 			resultWidth:        thirdColumnWidth,
-			resultHeight:       m.height - 2,
+			resultHeight:       h - 2,
 		}
-	} else if m.width > 100 {
-		m.layout = DualColumn
+	} else if w > 100 {
+		leftPaneWidth := w / 3
+		leftTopPaneHeight := (h / 2) - 2
+		leftBottomPaneHeight := h - leftTopPaneHeight - 4
+		rightPaneWidth := w - leftPaneWidth
 
-		leftPaneWidth := m.width / 3
-		leftTopPaneHeight := (m.height / 2) - 2
-		leftBottomPaneHeight := m.height - leftTopPaneHeight - 4
-		rightPaneWidth := m.width - leftPaneWidth
-
-		m.paneSize = &PaneSize{
+		return DualColumn, &paneSize{
 			hostnameListWidth:  leftPaneWidth,
 			hostnameListHeight: leftTopPaneHeight,
 			reportListWidth:    leftPaneWidth,
 			reportListHeight:   leftBottomPaneHeight,
 			resultWidth:        rightPaneWidth,
-			resultHeight:       m.height - 2,
-		}
-	} else {
-		m.layout = SingleColumn
-
-		firstRowHeight := m.height / 5
-		secondRowHeight := m.height / 5
-		thirstRowHeight := m.height - firstRowHeight - secondRowHeight
-
-		m.paneSize = &PaneSize{
-			hostnameListWidth:  m.width,
-			hostnameListHeight: firstRowHeight,
-			reportListWidth:    m.width,
-			reportListHeight:   secondRowHeight,
-			resultWidth:        m.width,
-			resultHeight:       thirstRowHeight,
+			resultHeight:       h - 2,
 		}
 	}
-}
 
-type ResultSizeMsg struct {
-	width, height int
+	firstRowHeight := h / 5
+	secondRowHeight := h / 5
+	thirstRowHeight := h - firstRowHeight - secondRowHeight
+
+	return SingleColumn, &paneSize{
+		hostnameListWidth:  w,
+		hostnameListHeight: firstRowHeight,
+		reportListWidth:    w,
+		reportListHeight:   secondRowHeight,
+		resultWidth:        w,
+		resultHeight:       thirstRowHeight,
+	}
 }
 
 func (m *Model) updateResultSize() tea.Cmd {

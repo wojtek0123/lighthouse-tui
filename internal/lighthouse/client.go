@@ -22,12 +22,16 @@ type CategoryID string
 const (
 	// Performance represents performance category in lighthouse report.
 	Performance CategoryID = "performance"
+
 	// Accessibility represents accessibility category in lighthouse report.
 	Accessibility CategoryID = "accessibility"
+
 	// BestPractises represents best practises category in lighthouse report.
 	BestPractises CategoryID = "best-practices"
+
 	// SEO represents seo category in lighthouse report.
 	SEO CategoryID = "seo"
+
 	// AgenticBrowsing represents agentic browsing category in lighthouse report.
 	AgenticBrowsing CategoryID = "agentic-browsing"
 )
@@ -38,18 +42,30 @@ type Result struct {
 	ReportName string
 }
 
-// check if lightyhouse version is supported.
-
+// ScoreDisplayMode specifies how a score or metric result is rendered in the UI.
 type ScoreDisplayMode string
 
 const (
+	// MetricSavings displays the score formatted as calculated metric savings.
 	MetricSavings ScoreDisplayMode = "metricSavings"
+
+	// NonApplicable indicates that the score does not apply to the current context.
 	NonApplicable ScoreDisplayMode = "notApplicable"
-	Informative   ScoreDisplayMode = "informative"
-	Numeric       ScoreDisplayMode = "numeric"
-	Binary        ScoreDisplayMode = "binary"
-	Manual        ScoreDisplayMode = "manual"
-	Error         ScoreDisplayMode = "error"
+
+	// Informative presents the score as contextual information rather than a numerical grade.
+	Informative ScoreDisplayMode = "informative"
+
+	// Numeric displays the score as a quantitative numerical value.
+	Numeric ScoreDisplayMode = "numeric"
+
+	// Binary displays the score as a simple pass/fail or true/false outcome.
+	Binary ScoreDisplayMode = "binary"
+
+	// Manual indicates that the score requires manual evaluation or visual entry.
+	Manual ScoreDisplayMode = "manual"
+
+	// Error indicates that an error occurred while calculating or displaying the score.
+	Error ScoreDisplayMode = "error"
 )
 
 // Report represents lighthouse reports in json format.
@@ -85,13 +101,21 @@ type AuditRefs struct {
 	Acronym string  `json:"acronym"`
 }
 
+// AuditGroup represents the category of audit logging or diagnostics grouping.
 type AuditGroup string
 
 const (
-	Metrics     AuditGroup = "metrics"
-	Insight     AuditGroup = "insight"
-	Diagnostics AuditGroup = "diagnostics"
-	Hidden      AuditGroup = "hidden"
+	// MetricsGroup identifies audit events related to performance and operational metrics.
+	MetricsGroup AuditGroup = "metrics"
+
+	// InsightGroup identifies audit events related to high-level system insights and analytics.
+	InsightGroup AuditGroup = "insight"
+
+	// DiagnosticsGroup identifies audit events used for technical troubleshooting and diagnostics.
+	DiagnosticsGroup AuditGroup = "diagnostics"
+
+	// HiddenGroup identifies audit events that are internal or hidden from standard user views.
+	HiddenGroup AuditGroup = "hidden"
 )
 
 // RunLighthouse starts lighthouse command in headless mode to get report for specific website.

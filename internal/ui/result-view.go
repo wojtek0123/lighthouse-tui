@@ -21,7 +21,6 @@ const progressMaxWidth = 75
 const badgeWidth = 11
 
 type status string
-type tab string
 
 const (
 	nonApplicableStatus status = "N/A"
@@ -34,14 +33,10 @@ const (
 	nilStatus           status = "-"
 )
 
-type ProgressMetric struct {
+type progressMetric struct {
 	label string
 	score float64
 }
-
-var baseStyle = lipgloss.NewStyle().
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("240"))
 
 // LighthouseMsg is a Bubble Tea message dispatched when lighthouse report is finished.
 type LighthouseMsg struct {
@@ -62,7 +57,7 @@ func getLighthouseResult(cmd *runningCmd, url string) tea.Cmd {
 	}
 }
 
-// ResultView represents the view model for displaying report results
+// ResultView represents the view model for displaying report results.
 type ResultView struct {
 	activeTab string
 	active    bool
@@ -71,20 +66,17 @@ type ResultView struct {
 
 	err            error
 	report         *lighthouse.Report
-	metrics        []ProgressMetric
-	overviewScores []ProgressMetric
+	metrics        []progressMetric
+	overviewScores []progressMetric
 
 	hostname   string
 	reportName string
 
-	tabs       *components.Tab
-	table      table.Model
-	sortColumn int
-	ascSort    bool
+	tabs  *components.Tab
+	table table.Model
 
 	width  int
 	height int
-	ready  bool
 }
 
 // NewResultView creates result view.
@@ -106,7 +98,6 @@ func NewResultView() *ResultView {
 // Update updates result view state.
 func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 	var cmd tea.Cmd
-	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -157,9 +148,8 @@ func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 	}
 
 	v.table, cmd = v.table.Update(msg)
-	cmds = append(cmds, cmd)
 
-	return v, tea.Batch(cmds...)
+	return v, cmd
 }
 
 // SetActiveTab sets which tab is currently active.
@@ -235,64 +225,55 @@ func (v *ResultView) getTabs() {
 		return cmp.Compare(pA, pB)
 	})
 }
+
 func (v *ResultView) buildAudit() {
 	v.table.SetRows([]table.Row{})
-	v.metrics = make([]ProgressMetric, 0)
-	v.overviewScores = make([]ProgressMetric, 0)
+	v.metrics = make([]progressMetric, 0)
+	v.overviewScores = make([]progressMetric, 0)
 
 	if v.report == nil {
 		return
 	}
 
-	if v.activeTab == "overview" {
-		for _, category := range v.report.Categories {
-			v.overviewScores = append(v.overviewScores, ProgressMetric{
-				label: category.Title,
-				score: category.Score,
-			})
+	category, exists := v.report.Categories[lighthouse.CategoryID(v.activeTab)]
 
-		}
-	} else {
-		category, exists := v.report.Categories[lighthouse.CategoryID(v.activeTab)]
-
-		if !exists {
-			log.Printf("error getting category")
-			return
-		}
-
-		groupedAuditRefs := make(map[string][]lighthouse.AuditRefs)
-
-		for _, ref := range category.AuditRefs {
-			groupedAuditRefs[ref.Group] = append(groupedAuditRefs[ref.Group], ref)
-		}
-
-		rows := []table.Row{}
-
-		for group, auditRefs := range groupedAuditRefs {
-			if group == "metrics" {
-				for _, metric := range auditRefs {
-					audit, ok := v.report.Audits[metric.ID]
-
-					if !ok {
-						log.Fatal("failed to get audit metric")
-						continue
-					}
-
-					v.metrics = append(v.metrics, ProgressMetric{label: audit.Title, score: *audit.Score})
-				}
-			}
-
-			rows = append(rows, v.buildRows(group, groupedAuditRefs)...)
-		}
-
-		sort.Slice(rows, func(i, j int) bool {
-			return rows[i][0] < rows[j][0]
-		})
-
-		v.table.SetColumns(buildColumns(v.activeTab, v.width))
-		v.table.SetRows(rows)
-		v.table.SetCursor(0)
+	if !exists {
+		log.Printf("error getting category")
+		return
 	}
+
+	groupedAuditRefs := make(map[string][]lighthouse.AuditRefs)
+
+	for _, ref := range category.AuditRefs {
+		groupedAuditRefs[ref.Group] = append(groupedAuditRefs[ref.Group], ref)
+	}
+
+	rows := []table.Row{}
+
+	for group, auditRefs := range groupedAuditRefs {
+		if group == "metrics" {
+			for _, metric := range auditRefs {
+				audit, ok := v.report.Audits[metric.ID]
+
+				if !ok {
+					log.Print("failed to get audit metric")
+					continue
+				}
+
+				v.metrics = append(v.metrics, progressMetric{label: audit.Title, score: *audit.Score})
+			}
+		}
+
+		rows = append(rows, v.buildRows(group, groupedAuditRefs)...)
+	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i][0] < rows[j][0]
+	})
+
+	v.table.SetColumns(buildColumns(v.activeTab, v.width))
+	v.table.SetRows(rows)
+	v.table.SetCursor(0)
 }
 
 func buildColumns(activeTab string, width int) []table.Column {
@@ -337,7 +318,6 @@ func (v ResultView) buildRows(group string, grouped map[string][]lighthouse.Audi
 			row = slices.Insert(row, 1, audit.DisplayValue)
 		}
 		rows = append(rows, row)
-
 	}
 
 	return rows
@@ -353,23 +333,27 @@ func scoreToStatus(score *float64, mode lighthouse.ScoreDisplayMode) string {
 		return badge(errorStatus, lipgloss.Red)
 	case lighthouse.Informative:
 		return badge(informativeStatus, lipgloss.Blue)
+	case lighthouse.Binary:
+	case lighthouse.MetricSavings:
+	case lighthouse.Numeric:
+		if score == nil {
+			return badge(nilStatus, lipgloss.BrightBlack)
+		}
+
+		switch {
+		case *score > 0.89:
+			return badge(goodStatus, lipgloss.Green)
+		case *score > 0.50:
+			return badge(averageStatus, lipgloss.Yellow)
+		default:
+			return badge(poorStatus, lipgloss.Red)
+		}
 	}
 
-	if score == nil {
-		return badge(nilStatus, lipgloss.BrightBlack)
-	}
-
-	switch {
-	case *score > 0.89:
-		return badge(goodStatus, lipgloss.Green)
-	case *score > 0.50:
-		return badge(averageStatus, lipgloss.Yellow)
-	default:
-		return badge(poorStatus, lipgloss.Red)
-	}
+	return ""
 }
 
-func renderProgressMetrics(metrics []ProgressMetric, w int) string {
+func renderProgressMetrics(metrics []progressMetric, w int) string {
 	if len(metrics) == 0 {
 		return ""
 	}
