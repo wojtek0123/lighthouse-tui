@@ -24,8 +24,8 @@ const (
 // Pane indicates active pane.
 type Pane int
 
-// ResultSizeMsg is a Bubble Tea message dispatched when result view size is changed.
-type ResultSizeMsg struct {
+// ReportViewSizeMsg is a Bubble Tea message dispatched when result view size is changed.
+type ReportViewSizeMsg struct {
 	width, height int
 }
 
@@ -60,7 +60,7 @@ type paneSize struct {
 // Model represents app main type.
 type Model struct {
 	hostnamesView *HostnamesView
-	resultView    *ResultView
+	resultView    *ReportView
 	reportsView   *ReportsView
 	modal         *URLModal
 
@@ -88,7 +88,7 @@ func InitialModel() Model {
 	}
 
 	hostnamesView := newHostnamesView(true)
-	resultView := NewResultView()
+	resultView := NewReportView()
 	reportsView := NewReportsView(false)
 	modal := NewURLModal()
 
@@ -168,14 +168,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		return m, tea.Batch(getLighthouseResult(cmd, msg.URL), addUniqueHostname(&m.hostnamesView.list, HostnameItem{hostname: u.Hostname(), loading: true, cmd: cmd}), m.hostnamesView.spinner.Tick)
+		return m, tea.Batch(getLighthouseReport(cmd, msg.URL), addUniqueHostname(&m.hostnamesView.list, HostnameItem{hostname: u.Hostname(), loading: true, cmd: cmd}), m.hostnamesView.spinner.Tick)
 	case RestartMsg:
 		ctx, cancel := context.WithCancel(context.Background())
 		cmd := &runningCmd{ctx: ctx, cancel: cancel}
 
 		m.hostnamesView.setLoading(cmd, msg.Index, true)
 
-		return m, tea.Batch(getLighthouseResult(cmd, msg.URL), m.hostnamesView.spinner.Tick)
+		return m, tea.Batch(getLighthouseReport(cmd, msg.URL), m.hostnamesView.spinner.Tick)
 	case LighthouseMsg:
 		if msg.err != nil {
 			return m, nil
@@ -329,7 +329,7 @@ func calculatePanesSize(w, h int) (Layout, *paneSize) {
 
 func (m *Model) updateResultSize() tea.Cmd {
 	return func() tea.Msg {
-		return ResultSizeMsg{
+		return ReportViewSizeMsg{
 			width:  m.paneSize.resultWidth,
 			height: m.paneSize.resultHeight,
 		}

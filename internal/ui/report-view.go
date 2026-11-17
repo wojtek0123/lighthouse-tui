@@ -45,7 +45,7 @@ type LighthouseMsg struct {
 	err    error
 }
 
-func getLighthouseResult(cmd *runningCmd, url string) tea.Cmd {
+func getLighthouseReport(cmd *runningCmd, url string) tea.Cmd {
 	return func() tea.Msg {
 		result, err := lighthouse.RunLighthouse(cmd.ctx, url)
 
@@ -57,8 +57,8 @@ func getLighthouseResult(cmd *runningCmd, url string) tea.Cmd {
 	}
 }
 
-// ResultView represents the view model for displaying report results.
-type ResultView struct {
+// ReportView represents the view model for displaying report results.
+type ReportView struct {
 	activeTab string
 	active    bool
 
@@ -79,14 +79,14 @@ type ResultView struct {
 	height int
 }
 
-// NewResultView creates result view.
-func NewResultView() *ResultView {
+// NewReportView creates result view.
+func NewReportView() *ReportView {
 	tabs := components.NewTabs()
 	table := table.New(
 		table.WithFocused(true),
 	)
 
-	return &ResultView{
+	return &ReportView{
 		activeTab: "performance",
 		tabs:      tabs,
 		table:     table,
@@ -96,7 +96,7 @@ func NewResultView() *ResultView {
 }
 
 // Update updates result view state.
-func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
+func (v ReportView) Update(msg tea.Msg) (ReportView, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -117,7 +117,7 @@ func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 			v.activeTab = v.categories[v.tabs.Index()]
 			v.refresh()
 		}
-	case ResultSizeMsg:
+	case ReportViewSizeMsg:
 		v.width = msg.width
 		v.height = msg.height
 		v.refresh()
@@ -153,12 +153,12 @@ func (v ResultView) Update(msg tea.Msg) (ResultView, tea.Cmd) {
 }
 
 // SetActiveTab sets which tab is currently active.
-func (v *ResultView) SetActiveTab(tab string) {
+func (v *ReportView) SetActiveTab(tab string) {
 	v.activeTab = tab
 }
 
-// View returns ui of ResultView as string.
-func (v ResultView) View() string {
+// View returns ui of ReportView as string.
+func (v ReportView) View() string {
 	if v.report == nil {
 		return lipgloss.Place(
 			v.width, v.height,
@@ -181,7 +181,7 @@ func (v ResultView) View() string {
 }
 
 // refresh rebuilds rows/metrics and sizes the table. Call it from Update only.
-func (v *ResultView) refresh() {
+func (v *ReportView) refresh() {
 	v.tabs.SetTabs(v.categories)
 	v.buildAudit()
 
@@ -196,7 +196,7 @@ func (v *ResultView) refresh() {
 	v.table.SetHeight(max(tableHeight, 1))
 }
 
-func (v *ResultView) getTabs() {
+func (v *ReportView) getTabs() {
 	v.categories = v.categories[:0]
 
 	for _, c := range slices.Collect(maps.Values(v.report.Categories)) {
@@ -226,7 +226,7 @@ func (v *ResultView) getTabs() {
 	})
 }
 
-func (v *ResultView) buildAudit() {
+func (v *ReportView) buildAudit() {
 	v.table.SetRows([]table.Row{})
 	v.metrics = make([]progressMetric, 0)
 	v.overviewScores = make([]progressMetric, 0)
@@ -291,7 +291,7 @@ func buildColumns(activeTab string, width int) []table.Column {
 	return columns
 }
 
-func (v ResultView) buildRows(group string, grouped map[string][]lighthouse.AuditRefs) []table.Row {
+func (v ReportView) buildRows(group string, grouped map[string][]lighthouse.AuditRefs) []table.Row {
 	rows := []table.Row{}
 
 	if group == "hidden" || group == "" {
@@ -412,7 +412,7 @@ func RenderPane(header, content string, width, height int, focus bool) string {
 }
 
 // SetHostname sets which hostname is focus from HostnamesView.
-func (v *ResultView) SetHostname(hostname string) {
+func (v *ReportView) SetHostname(hostname string) {
 	v.hostname = hostname
 }
 
@@ -425,6 +425,6 @@ func badge(s status, fg color.Color) string {
 }
 
 // SetReport sets lighthouse report.
-func (v *ResultView) SetReport(r *lighthouse.Report) {
+func (v *ReportView) SetReport(r *lighthouse.Report) {
 	v.report = r
 }
