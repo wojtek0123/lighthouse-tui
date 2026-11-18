@@ -21,6 +21,18 @@ const (
 	resultPane
 )
 
+var (
+	activeBorderColor   = lipgloss.Color("62")  // Indigo/Purple.
+	inactiveBorderColor = lipgloss.Color("240") // Dark Gray.
+	// activeTitleColor    = lipgloss.Color("212") // Pink.
+	inactiveTitleColor = lipgloss.Color("240") // Dark Gray.
+)
+
+type runningCmd struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
 // Pane indicates active pane.
 type Pane int
 
