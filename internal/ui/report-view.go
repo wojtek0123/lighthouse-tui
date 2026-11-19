@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"sort"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/progress"
@@ -21,11 +21,6 @@ var (
 	goodIndicatorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Green)
 	averageIndicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Yellow)
 	poorIndicatorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Red)
-)
-
-const (
-	goodThreshold    = 0.9
-	averageThreshold = 0.5
 )
 
 const progressMaxWidth = 75
@@ -284,25 +279,41 @@ func (v *ReportView) buildAudits() error {
 				return fmt.Errorf("expected Audit but got %T", audit)
 			}
 
-			indicator := renderIndicator(audit)
+			// score := 0.0
+			//
+			// if audit.Score != nil {
+			// 	score = *audit.Score
+			// } else {
+			// 	score = 1.1
+			// }
+
+			indicator := scoreIndicator(audit)
+			priority := strconv.Itoa(audit.ScorePriority())
 
 			row := table.Row{
+				priority,
 				indicator,
 				ref.Group,
 				audit.Title,
 			}
 
 			if v.activeTab == lighthouse.PerformanceCategoryID || v.activeTab == lighthouse.AgenticBrowsingCategoryID {
-				row = table.Row{indicator, audit.DisplayValue, ref.Group, audit.Title}
+				row = table.Row{priority, indicator, audit.DisplayValue, ref.Group, audit.Title}
 			}
 
 			rows = append(rows, row)
 		}
 	}
 
-	sort.Slice(rows, func(i, j int) bool {
-		return rows[i][0] < rows[j][0]
+	slices.SortFunc(rows, func(i, j table.Row) int {
+		return cmp.Compare(i[0], j[0])
 	})
+
+	for i := range rows {
+		if len(rows[i]) > 0 {
+			rows[i] = rows[i][1:]
+		}
+	}
 
 	v.table.SetColumns(buildColumns(v.activeTab, v.width))
 	v.table.SetRows(rows)
@@ -326,15 +337,15 @@ func buildColumns(activeTab lighthouse.CategoryID, width int) []table.Column {
 	return columns
 }
 
-func renderIndicator(a lighthouse.Audit) string {
-	if a.Score != nil {
+func scoreIndicator(a lighthouse.Audit) string {
+	if a.Score == nil {
 		return missingIndicatorStyle.Render("○")
 	}
 
 	switch {
-	case *a.Score >= 0.9:
+	case *a.Score >= lighthouse.NeedImprovementThreshold:
 		return goodIndicatorStyle.Render("●")
-	case *a.Score >= 0.5:
+	case *a.Score >= lighthouse.PoorThreshold:
 		return averageIndicatorStyle.Render("■")
 	default:
 		return poorIndicatorStyle.Render("▲")
@@ -351,9 +362,9 @@ func renderProgressMetrics(metrics []progressMetric, w int) string {
 	for _, metric := range metrics {
 		color := lipgloss.Red
 
-		if metric.score > 0.9 {
+		if metric.score >= lighthouse.NeedImprovementThreshold {
 			color = lipgloss.Green
-		} else if metric.score > 0.5 {
+		} else if metric.score >= lighthouse.PoorThreshold {
 			color = lipgloss.Yellow
 		}
 
