@@ -20,20 +20,20 @@ const appName string = "lighthouse-tui"
 type CategoryID string
 
 const (
-	// Performance represents performance category in lighthouse report.
-	Performance CategoryID = "performance"
+	// PerformanceCategoryID represents performance category in lighthouse report.
+	PerformanceCategoryID CategoryID = "performance"
 
-	// Accessibility represents accessibility category in lighthouse report.
-	Accessibility CategoryID = "accessibility"
+	// AccessibilityCategoryID represents accessibility category in lighthouse report.
+	AccessibilityCategoryID CategoryID = "accessibility"
 
-	// BestPractises represents best practises category in lighthouse report.
-	BestPractises CategoryID = "best-practices"
+	// BestPractisesCategoryID represents best practises category in lighthouse report.
+	BestPractisesCategoryID CategoryID = "best-practices"
 
-	// SEO represents seo category in lighthouse report.
-	SEO CategoryID = "seo"
+	// SeoCategoryID represents seo category in lighthouse report.
+	SeoCategoryID CategoryID = "seo"
 
-	// AgenticBrowsing represents agentic browsing category in lighthouse report.
-	AgenticBrowsing CategoryID = "agentic-browsing"
+	// AgenticBrowsingCategoryID represents agentic browsing category in lighthouse report.
+	AgenticBrowsingCategoryID CategoryID = "agentic-browsing"
 )
 
 // Result represents report of lighthouse package and report name.
@@ -70,26 +70,29 @@ const (
 
 // Report represents lighthouse reports in json format.
 type Report struct {
-	FetchTime         string `json:"fetchTime"`
-	LighthouseVersion string `json:"lighthouseVersion"`
-	Audits            map[string]struct {
-		NumericValue float64 `json:"numericValue"`
+	FinalURL          string           `json:"finalUrl"`
+	FetchTime         string           `json:"fetchTime"`
+	LighthouseVersion string           `json:"lighthouseVersion"`
+	Audits            map[string]Audit `json:"audits"`
+	Categories        map[CategoryID]Category
+}
 
-		DisplayValue     string           `json:"displayValue"`
-		Title            string           `json:"title"`
-		Description      string           `json:"description"`
-		Unit             string           `json:"numericUnit"`
-		Score            *float64         `json:"score"`
-		ScoreDisplayMode ScoreDisplayMode `json:"scoreDisplayMode"`
-	} `json:"audits"`
-	Categories map[CategoryID]Category
+// Audit represents lighthouse audit details.
+type Audit struct {
+	NumericValue     float64          `json:"numericValue"`
+	DisplayValue     string           `json:"displayValue"`
+	Title            string           `json:"title"`
+	Description      string           `json:"description"`
+	Unit             string           `json:"numericUnit"`
+	Score            *float64         `json:"score"`
+	ScoreDisplayMode ScoreDisplayMode `json:"scoreDisplayMode"`
 }
 
 // Category represents specific category structure.
 type Category struct {
-	Title     string  `json:"title"`
-	ID        string  `json:"id"`
-	Score     float64 `json:"score"`
+	Title     string     `json:"title"`
+	ID        CategoryID `json:"id"`
+	Score     float64    `json:"score"`
 	AuditRefs []AuditRefs
 }
 
