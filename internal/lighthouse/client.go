@@ -2,13 +2,16 @@
 package lighthouse
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -152,6 +155,15 @@ func (a Audit) ScorePriority() int {
 	}
 }
 
+// CategoryOrder maps each audit category to its zero-based display or sort priority.
+var CategoryOrder = map[CategoryID]int{
+	PerformanceCategoryID:     0,
+	AccessibilityCategoryID:   1,
+	BestPractisesCategoryID:   2,
+	SeoCategoryID:             3,
+	AgenticBrowsingCategoryID: 4,
+}
+
 // RunLighthouse starts lighthouse command in headless mode to get report for specific website.
 func RunLighthouse(ctx context.Context, url string) (*Result, error) {
 	cmd := exec.CommandContext(
@@ -203,6 +215,25 @@ func RunLighthouse(ctx context.Context, url string) (*Result, error) {
 		Report:     &report,
 		ReportName: filename,
 	}, nil
+}
+
+// categoryRank returns the sort position for id, placing unknown categories after known ones.
+func categoryRank(id CategoryID) int {
+	if rank, ok := CategoryOrder[id]; ok {
+		return rank
+	}
+	return math.MaxInt
+}
+
+// SortCategories sorts categories in place according to CategoryOrder,
+// placing unknown categories at the end and breaking ties by ID.
+func SortCategories(categories []Category) {
+	slices.SortFunc(categories, func(a, b Category) int {
+		if c := cmp.Compare(categoryRank(a.ID), categoryRank(b.ID)); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
 }
 
 func reportName() string {

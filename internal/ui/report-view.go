@@ -177,7 +177,7 @@ func (v *ReportView) initView(report lighthouse.Report) error {
 	categories := slices.Collect(maps.Values(report.Categories))
 	tabs := make([]string, 0, len(categories))
 
-	sortCategories(categories)
+	lighthouse.SortCategories(categories)
 
 	for _, c := range categories {
 		tabs = append(tabs, c.Title)
@@ -420,28 +420,4 @@ func (v *ReportView) SetHostname(hostname string) {
 // SetReport sets lighthouse report.
 func (v *ReportView) SetReport(r *lighthouse.Report) {
 	v.report = r
-}
-
-func sortCategories(categories []lighthouse.Category) {
-	tabsOrder := map[lighthouse.CategoryID]int{
-		lighthouse.PerformanceCategoryID:     0,
-		lighthouse.AccessibilityCategoryID:   1,
-		lighthouse.BestPractisesCategoryID:   2,
-		lighthouse.SeoCategoryID:             3,
-		lighthouse.AgenticBrowsingCategoryID: 4,
-	}
-
-	slices.SortFunc(categories, func(a, b lighthouse.Category) int {
-		pA, existsA := tabsOrder[a.ID]
-		pB, existsB := tabsOrder[b.ID]
-
-		if !existsA {
-			pA = -1
-		}
-		if !existsB {
-			pB = -1
-		}
-
-		return cmp.Compare(pA, pB)
-	})
 }
