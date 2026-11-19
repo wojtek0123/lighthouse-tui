@@ -2,8 +2,8 @@ package ui
 
 import (
 	"cmp"
+	"fmt"
 	"image/color"
-	"log"
 	"maps"
 	"slices"
 	"sort"
@@ -59,7 +59,7 @@ func getLighthouseReport(cmd *runningCmd, url string) tea.Cmd {
 
 // ReportView represents the view model for displaying report results.
 type ReportView struct {
-	activeTab string
+	activeTab lighthouse.CategoryID
 	active    bool
 
 	categories []lighthouse.Category
@@ -90,7 +90,6 @@ func NewReportView() *ReportView {
 	header := NewReportHeader()
 
 	return &ReportView{
-		activeTab:  "performance",
 		tabs:       tabs,
 		table:      table,
 		active:     false,
@@ -113,27 +112,39 @@ func (v ReportView) Update(msg tea.Msg) (ReportView, tea.Cmd) {
 			}
 
 			v.showHeader = !v.showHeader
-			v.refreshTableHeight()
+			v.updateTableHeight()
 			return v, nil
 		case "[":
 			if !v.active {
 				return v, nil
 			}
 			v.tabs.Previous()
-			v.activeTab = v.categories[v.tabs.Index()].Title
-			v.buildAudit()
+			v.activeTab = v.categories[v.tabs.Index()].ID
+			err := v.buildAudits()
+
+			if err != nil {
+				v.err = err
+			}
+
+			return v, nil
 		case "]":
 			if !v.active {
 				return v, nil
 			}
 			v.tabs.Next()
-			v.activeTab = v.categories[v.tabs.Index()].Title
-			v.buildAudit()
+			v.activeTab = v.categories[v.tabs.Index()].ID
+			err := v.buildAudits()
+
+			if err != nil {
+				v.err = err
+			}
+
+			return v, nil
 		}
 	case ReportViewSizeMsg:
 		v.width = msg.width
 		v.height = msg.height
-		v.refreshTableHeight()
+		v.updateTableHeight()
 		v.table.SetWidth(msg.width)
 	case ActivePaneMsg:
 		active := msg.pane == resultPane
@@ -154,7 +165,13 @@ func (v ReportView) Update(msg tea.Msg) (ReportView, tea.Cmd) {
 				v.err = err
 			}
 
-			v.initView(*report)
+			err = v.initView(*report)
+
+			if err != nil {
+				v.err = err
+			}
+
+			return v, nil
 		}
 	}
 
@@ -163,7 +180,7 @@ func (v ReportView) Update(msg tea.Msg) (ReportView, tea.Cmd) {
 	return v, cmd
 }
 
-func (v *ReportView) initView(report lighthouse.Report) {
+func (v *ReportView) initView(report lighthouse.Report) error {
 	categories := slices.Collect(maps.Values(report.Categories))
 	tabs := make([]string, 0, len(categories))
 
@@ -176,13 +193,20 @@ func (v *ReportView) initView(report lighthouse.Report) {
 	v.categories = categories
 	v.report = &report
 	v.tabs.SetTabs(tabs)
-	v.buildAudit()
 	v.header.Init(report, categories)
 	v.showHeader = true
+
+	err := v.buildAudits()
+
+	if err != nil {
+		return fmt.Errorf("failed to build audits %w:", err)
+	}
+
+	return nil
 }
 
 // SetActiveTab sets which tab is currently active.
-func (v *ReportView) SetActiveTab(tab string) {
+func (v *ReportView) SetActiveTab(tab lighthouse.CategoryID) {
 	v.activeTab = tab
 }
 
@@ -214,7 +238,7 @@ func (v ReportView) View() string {
 	return lipgloss.JoinVertical(lipgloss.Top, parts...)
 }
 
-func (v *ReportView) refreshTableHeight() {
+func (v *ReportView) updateTableHeight() {
 	headerHeight := 0
 	metricsHeight := lipgloss.Height(renderProgressMetrics(v.metrics, min(v.width, 30)))
 
@@ -225,40 +249,48 @@ func (v *ReportView) refreshTableHeight() {
 	v.table.SetHeight(max(v.height-lipgloss.Height(v.tabs.View())-headerHeight-metricsHeight, 1))
 }
 
-func (v *ReportView) buildAudit() {
+func (v *ReportView) buildAudits() error {
 	v.table.SetRows([]table.Row{})
 	v.metrics = make([]progressMetric, 0)
 	v.overviewScores = make([]progressMetric, 0)
 
 	if v.report == nil {
-		return
+		return nil
 	}
 
 	category := v.categories[v.tabs.Index()]
-
-	groupedAuditRefs := make(map[string][]lighthouse.AuditRefs)
-
-	for _, ref := range category.AuditRefs {
-		groupedAuditRefs[ref.Group] = append(groupedAuditRefs[ref.Group], ref)
-	}
-
 	rows := []table.Row{}
 
-	for group, auditRefs := range groupedAuditRefs {
-		if group == "metrics" {
-			for _, metric := range auditRefs {
-				audit, ok := v.report.Audits[metric.ID]
+	for _, ref := range category.AuditRefs {
+		if ref.Group == "metrics" {
+			metric, ok := v.report.Audits[ref.ID]
 
-				if !ok {
-					log.Print("failed to get audit metric")
-					continue
-				}
-
-				v.metrics = append(v.metrics, progressMetric{label: audit.Title, score: *audit.Score})
+			if !ok {
+				return fmt.Errorf("expected Audit %T", metric)
 			}
-		}
 
-		rows = append(rows, v.buildRows(group, groupedAuditRefs)...)
+			v.metrics = append(v.metrics, progressMetric{label: metric.Title, score: *metric.Score})
+		} else if ref.Group != "hidden" && ref.Group != "" {
+			audit, ok := v.report.Audits[ref.ID]
+
+			if !ok {
+				return fmt.Errorf("expected Audit but got %T", audit)
+			}
+
+			score := scoreToStatus(audit.Score, audit.ScoreDisplayMode)
+
+			row := table.Row{
+				score,
+				ref.Group,
+				audit.Title,
+			}
+
+			if v.activeTab == lighthouse.PerformanceCategoryID || v.activeTab == lighthouse.AgenticBrowsingCategoryID {
+				row = table.Row{score, audit.DisplayValue, ref.Group, audit.Title}
+			}
+
+			rows = append(rows, row)
+		}
 	}
 
 	sort.Slice(rows, func(i, j int) bool {
@@ -268,53 +300,23 @@ func (v *ReportView) buildAudit() {
 	v.table.SetColumns(buildColumns(v.activeTab, v.width))
 	v.table.SetRows(rows)
 	v.table.SetCursor(0)
+
+	return nil
 }
 
-func buildColumns(activeTab string, width int) []table.Column {
+func buildColumns(activeTab lighthouse.CategoryID, width int) []table.Column {
 	columns := []table.Column{
 		{Title: "Status", Width: badgeWidth},
 		{Title: "Category", Width: 20},
 		{Title: "Name", Width: width - 41},
 	}
 
-	if activeTab == string(lighthouse.PerformanceCategoryID) || activeTab == string(lighthouse.AgenticBrowsingCategoryID) {
+	if activeTab == lighthouse.PerformanceCategoryID || activeTab == lighthouse.AgenticBrowsingCategoryID {
 		columns = slices.Insert(columns, 1, table.Column{Title: "Savings", Width: 20})
 		columns[3].Width = width - 61
 	}
 
 	return columns
-}
-
-func (v ReportView) buildRows(group string, grouped map[string][]lighthouse.AuditRefs) []table.Row {
-	rows := []table.Row{}
-
-	if group == "hidden" || group == "" {
-		return []table.Row{}
-	}
-
-	for _, a := range grouped[group] {
-		audit, ok := v.report.Audits[a.ID]
-
-		if !ok {
-			log.Printf("error while getting audit")
-			continue
-		}
-
-		score := scoreToStatus(audit.Score, audit.ScoreDisplayMode)
-
-		row := table.Row{
-			score,
-			group,
-			audit.Title,
-		}
-
-		if v.activeTab == string(lighthouse.PerformanceCategoryID) || v.activeTab == string(lighthouse.AgenticBrowsingCategoryID) {
-			row = slices.Insert(row, 1, audit.DisplayValue)
-		}
-		rows = append(rows, row)
-	}
-
-	return rows
 }
 
 func scoreToStatus(score *float64, mode lighthouse.ScoreDisplayMode) string {
