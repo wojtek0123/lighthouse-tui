@@ -16,6 +16,18 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
 )
 
+var (
+	missingIndicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.BrightBlack)
+	goodIndicatorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Green)
+	averageIndicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Yellow)
+	poorIndicatorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Red)
+)
+
+const (
+	goodThreshold    = 0.9
+	averageThreshold = 0.5
+)
+
 const progressMaxWidth = 75
 
 type progressMetric struct {
@@ -272,16 +284,16 @@ func (v *ReportView) buildAudits() error {
 				return fmt.Errorf("expected Audit but got %T", audit)
 			}
 
-			score := scoreToStatus(audit.Score, audit.ScoreDisplayMode)
+			indicator := renderIndicator(audit)
 
 			row := table.Row{
-				score,
+				indicator,
 				ref.Group,
 				audit.Title,
 			}
 
 			if v.activeTab == lighthouse.PerformanceCategoryID || v.activeTab == lighthouse.AgenticBrowsingCategoryID {
-				row = table.Row{score, audit.DisplayValue, ref.Group, audit.Title}
+				row = table.Row{indicator, audit.DisplayValue, ref.Group, audit.Title}
 			}
 
 			rows = append(rows, row)
@@ -314,23 +326,19 @@ func buildColumns(activeTab lighthouse.CategoryID, width int) []table.Column {
 	return columns
 }
 
-func scoreToStatus(score *float64, mode lighthouse.ScoreDisplayMode) string {
-	if mode == lighthouse.Binary || mode == lighthouse.MetricSavings || mode == lighthouse.Numeric {
-		if score == nil {
-			return lipgloss.NewStyle().Foreground(lipgloss.BrightBlack).Render("●")
-		}
-
-		switch {
-		case *score >= 0.9:
-			return lipgloss.NewStyle().Foreground(lipgloss.Green).Render("●")
-		case *score >= 0.5:
-			return lipgloss.NewStyle().Foreground(lipgloss.Yellow).Render("■")
-		default:
-			return lipgloss.NewStyle().Foreground(lipgloss.Red).Render("▲")
-		}
+func renderIndicator(a lighthouse.Audit) string {
+	if a.Score != nil {
+		return missingIndicatorStyle.Render("○")
 	}
 
-	return lipgloss.NewStyle().Foreground(lipgloss.BrightBlack).Render("○")
+	switch {
+	case *a.Score >= 0.9:
+		return goodIndicatorStyle.Render("●")
+	case *a.Score >= 0.5:
+		return averageIndicatorStyle.Render("■")
+	default:
+		return poorIndicatorStyle.Render("▲")
+	}
 }
 
 func renderProgressMetrics(metrics []progressMetric, w int) string {
