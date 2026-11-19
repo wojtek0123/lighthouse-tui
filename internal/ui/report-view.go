@@ -3,7 +3,6 @@ package ui
 import (
 	"cmp"
 	"fmt"
-	"image/color"
 	"maps"
 	"slices"
 	"sort"
@@ -18,20 +17,6 @@ import (
 )
 
 const progressMaxWidth = 75
-const badgeWidth = 11
-
-type status string
-
-const (
-	nonApplicableStatus status = "N/A"
-	manualStatus        status = "MANUAL"
-	errorStatus         status = "Error"
-	informativeStatus   status = "INFO"
-	goodStatus          status = "GOOD"
-	poorStatus          status = "POOR"
-	averageStatus       status = "AVERAGE"
-	nilStatus           status = "-"
-)
 
 type progressMetric struct {
 	label string
@@ -335,11 +320,12 @@ func scoreToStatus(score *float64, mode lighthouse.ScoreDisplayMode) string {
 			return lipgloss.NewStyle().Foreground(lipgloss.BrightBlack).Render("●")
 		}
 
-		if *score >= 0.9 {
+		switch {
+		case *score >= 0.9:
 			return lipgloss.NewStyle().Foreground(lipgloss.Green).Render("●")
-		} else if *score >= 0.5 {
+		case *score >= 0.5:
 			return lipgloss.NewStyle().Foreground(lipgloss.Yellow).Render("■")
-		} else {
+		default:
 			return lipgloss.NewStyle().Foreground(lipgloss.Red).Render("▲")
 		}
 	}
@@ -410,14 +396,6 @@ func RenderPane(header, content string, width, height int, focus bool) string {
 // SetHostname sets which hostname is focus from HostnamesView.
 func (v *ReportView) SetHostname(hostname string) {
 	v.hostname = hostname
-}
-
-func badge(s status, fg color.Color) string {
-	return lipgloss.NewStyle().
-		Foreground(fg).
-		Bold(true).
-		Width(badgeWidth).
-		Render(string(s))
 }
 
 // SetReport sets lighthouse report.
