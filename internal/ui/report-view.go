@@ -147,6 +147,7 @@ func (v ReportView) Update(msg tea.Msg) (ReportView, tea.Cmd) {
 		v.updateTableHeight()
 		v.table.SetWidth(msg.width)
 	case ActivePaneMsg:
+		// TODO: potencial improvement
 		active := msg.pane == resultPane
 		v.tabs.SetFocus(active)
 		v.active = active
