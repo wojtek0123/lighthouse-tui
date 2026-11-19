@@ -316,45 +316,35 @@ func (v *ReportView) buildAudits() error {
 
 func buildColumns(activeTab lighthouse.CategoryID, width int) []table.Column {
 	columns := []table.Column{
-		{Title: "Status", Width: badgeWidth},
-		{Title: "Category", Width: 20},
-		{Title: "Name", Width: width - 41},
+		{Title: "", Width: 1},
+		{Title: "Category", Width: 30},
+		{Title: "Name", Width: width - 39},
 	}
 
 	if activeTab == lighthouse.PerformanceCategoryID || activeTab == lighthouse.AgenticBrowsingCategoryID {
-		columns = slices.Insert(columns, 1, table.Column{Title: "Savings", Width: 20})
-		columns[3].Width = width - 61
+		columns = slices.Insert(columns, 1, table.Column{Title: "Savings", Width: 26})
+		columns[3].Width = width - 67
 	}
 
 	return columns
 }
 
 func scoreToStatus(score *float64, mode lighthouse.ScoreDisplayMode) string {
-	switch mode {
-	case lighthouse.NonApplicable:
-		return badge(nonApplicableStatus, lipgloss.BrightBlack)
-	case lighthouse.Manual:
-		return badge(manualStatus, lipgloss.Yellow)
-	case lighthouse.Error:
-		return badge(errorStatus, lipgloss.Red)
-	case lighthouse.Informative:
-		return badge(informativeStatus, lipgloss.Blue)
-	case lighthouse.Binary, lighthouse.MetricSavings, lighthouse.Numeric:
+	if mode == lighthouse.Binary || mode == lighthouse.MetricSavings || mode == lighthouse.Numeric {
 		if score == nil {
-			return badge(nilStatus, lipgloss.BrightBlack)
+			return lipgloss.NewStyle().Foreground(lipgloss.BrightBlack).Render("●")
 		}
 
-		switch {
-		case *score >= 0.9:
-			return badge(goodStatus, lipgloss.Green)
-		case *score >= 0.5:
-			return badge(averageStatus, lipgloss.Yellow)
-		default:
-			return badge(poorStatus, lipgloss.Red)
+		if *score >= 0.9 {
+			return lipgloss.NewStyle().Foreground(lipgloss.Green).Render("●")
+		} else if *score >= 0.5 {
+			return lipgloss.NewStyle().Foreground(lipgloss.Yellow).Render("■")
+		} else {
+			return lipgloss.NewStyle().Foreground(lipgloss.Red).Render("▲")
 		}
-	default:
-		return badge(nilStatus, lipgloss.BrightBlack)
 	}
+
+	return lipgloss.NewStyle().Foreground(lipgloss.BrightBlack).Render("○")
 }
 
 func renderProgressMetrics(metrics []progressMetric, w int) string {
