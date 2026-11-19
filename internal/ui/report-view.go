@@ -199,7 +199,7 @@ func (v *ReportView) initView(report lighthouse.Report) error {
 	err := v.buildAudits()
 
 	if err != nil {
-		return fmt.Errorf("failed to build audits %w:", err)
+		return fmt.Errorf("failed to build audits %w", err)
 	}
 
 	return nil
@@ -212,11 +212,20 @@ func (v *ReportView) SetActiveTab(tab lighthouse.CategoryID) {
 
 // View returns ui of ReportView as string.
 func (v ReportView) View() string {
+	if v.err != nil {
+		return lipgloss.Place(
+			v.width, v.height,
+			lipgloss.Center, lipgloss.Center,
+			lipgloss.NewStyle().Foreground(lipgloss.Red).
+				Render(v.err.Error()),
+		)
+	}
+
 	if v.report == nil {
 		return lipgloss.Place(
 			v.width, v.height,
 			lipgloss.Center, lipgloss.Center,
-			lipgloss.NewStyle().Foreground(lipgloss.Color("245")).
+			lipgloss.NewStyle().Foreground(lipgloss.BrightBlack).
 				Render(lipgloss.JoinVertical(lipgloss.Center, "No results", "", "Press 'n' to enter url and measure metrics")),
 		)
 	}
