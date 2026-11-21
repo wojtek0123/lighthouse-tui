@@ -3,10 +3,9 @@ package ui
 import (
 	"cmp"
 	"fmt"
-	"image/color"
 	"maps"
 	"slices"
-	"sort"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/progress"
@@ -17,21 +16,14 @@ import (
 	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
 )
 
-const progressMaxWidth = 75
-const badgeWidth = 11
-
-type status string
-
-const (
-	nonApplicableStatus status = "N/A"
-	manualStatus        status = "MANUAL"
-	errorStatus         status = "Error"
-	informativeStatus   status = "INFO"
-	goodStatus          status = "GOOD"
-	poorStatus          status = "POOR"
-	averageStatus       status = "AVERAGE"
-	nilStatus           status = "-"
+var (
+	missingIndicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.BrightBlack)
+	goodIndicatorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Green)
+	averageIndicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Yellow)
+	poorIndicatorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Red)
 )
+
+const progressMaxWidth = 75
 
 type progressMetric struct {
 	label string
@@ -185,7 +177,7 @@ func (v *ReportView) initView(report lighthouse.Report) error {
 	categories := slices.Collect(maps.Values(report.Categories))
 	tabs := make([]string, 0, len(categories))
 
-	sortCategories(categories)
+	lighthouse.SortCategories(categories)
 
 	for _, c := range categories {
 		tabs = append(tabs, c.Title)
@@ -287,25 +279,41 @@ func (v *ReportView) buildAudits() error {
 				return fmt.Errorf("expected Audit but got %T", audit)
 			}
 
-			score := scoreToStatus(audit.Score, audit.ScoreDisplayMode)
+			// score := 0.0
+			//
+			// if audit.Score != nil {
+			// 	score = *audit.Score
+			// } else {
+			// 	score = 1.1
+			// }
+
+			indicator := scoreIndicator(audit)
+			priority := strconv.Itoa(audit.ScorePriority())
 
 			row := table.Row{
-				score,
+				priority,
+				indicator,
 				ref.Group,
 				audit.Title,
 			}
 
 			if v.activeTab == lighthouse.PerformanceCategoryID || v.activeTab == lighthouse.AgenticBrowsingCategoryID {
-				row = table.Row{score, audit.DisplayValue, ref.Group, audit.Title}
+				row = table.Row{priority, indicator, audit.DisplayValue, ref.Group, audit.Title}
 			}
 
 			rows = append(rows, row)
 		}
 	}
 
-	sort.Slice(rows, func(i, j int) bool {
-		return rows[i][0] < rows[j][0]
+	slices.SortFunc(rows, func(i, j table.Row) int {
+		return cmp.Compare(i[0], j[0])
 	})
+
+	for i := range rows {
+		if len(rows[i]) > 0 {
+			rows[i] = rows[i][1:]
+		}
+	}
 
 	v.table.SetColumns(buildColumns(v.activeTab, v.width))
 	v.table.SetRows(rows)
@@ -316,44 +324,31 @@ func (v *ReportView) buildAudits() error {
 
 func buildColumns(activeTab lighthouse.CategoryID, width int) []table.Column {
 	columns := []table.Column{
-		{Title: "Status", Width: badgeWidth},
-		{Title: "Category", Width: 20},
-		{Title: "Name", Width: width - 41},
+		{Title: "", Width: 1},
+		{Title: "Category", Width: 30},
+		{Title: "Name", Width: width - 39},
 	}
 
 	if activeTab == lighthouse.PerformanceCategoryID || activeTab == lighthouse.AgenticBrowsingCategoryID {
-		columns = slices.Insert(columns, 1, table.Column{Title: "Savings", Width: 20})
-		columns[3].Width = width - 61
+		columns = slices.Insert(columns, 1, table.Column{Title: "Savings", Width: 26})
+		columns[3].Width = width - 67
 	}
 
 	return columns
 }
 
-func scoreToStatus(score *float64, mode lighthouse.ScoreDisplayMode) string {
-	switch mode {
-	case lighthouse.NonApplicable:
-		return badge(nonApplicableStatus, lipgloss.BrightBlack)
-	case lighthouse.Manual:
-		return badge(manualStatus, lipgloss.Yellow)
-	case lighthouse.Error:
-		return badge(errorStatus, lipgloss.Red)
-	case lighthouse.Informative:
-		return badge(informativeStatus, lipgloss.Blue)
-	case lighthouse.Binary, lighthouse.MetricSavings, lighthouse.Numeric:
-		if score == nil {
-			return badge(nilStatus, lipgloss.BrightBlack)
-		}
+func scoreIndicator(a lighthouse.Audit) string {
+	if a.Score == nil {
+		return missingIndicatorStyle.Render("○")
+	}
 
-		switch {
-		case *score >= 0.9:
-			return badge(goodStatus, lipgloss.Green)
-		case *score >= 0.5:
-			return badge(averageStatus, lipgloss.Yellow)
-		default:
-			return badge(poorStatus, lipgloss.Red)
-		}
+	switch {
+	case *a.Score >= lighthouse.NeedImprovementThreshold:
+		return goodIndicatorStyle.Render("●")
+	case *a.Score >= lighthouse.PoorThreshold:
+		return averageIndicatorStyle.Render("■")
 	default:
-		return badge(nilStatus, lipgloss.BrightBlack)
+		return poorIndicatorStyle.Render("▲")
 	}
 }
 
@@ -367,9 +362,9 @@ func renderProgressMetrics(metrics []progressMetric, w int) string {
 	for _, metric := range metrics {
 		color := lipgloss.Red
 
-		if metric.score > 0.9 {
+		if metric.score >= lighthouse.NeedImprovementThreshold {
 			color = lipgloss.Green
-		} else if metric.score > 0.5 {
+		} else if metric.score >= lighthouse.PoorThreshold {
 			color = lipgloss.Yellow
 		}
 
@@ -422,39 +417,7 @@ func (v *ReportView) SetHostname(hostname string) {
 	v.hostname = hostname
 }
 
-func badge(s status, fg color.Color) string {
-	return lipgloss.NewStyle().
-		Foreground(fg).
-		Bold(true).
-		Width(badgeWidth).
-		Render(string(s))
-}
-
 // SetReport sets lighthouse report.
 func (v *ReportView) SetReport(r *lighthouse.Report) {
 	v.report = r
-}
-
-func sortCategories(categories []lighthouse.Category) {
-	tabsOrder := map[lighthouse.CategoryID]int{
-		lighthouse.PerformanceCategoryID:     0,
-		lighthouse.AccessibilityCategoryID:   1,
-		lighthouse.BestPractisesCategoryID:   2,
-		lighthouse.SeoCategoryID:             3,
-		lighthouse.AgenticBrowsingCategoryID: 4,
-	}
-
-	slices.SortFunc(categories, func(a, b lighthouse.Category) int {
-		pA, existsA := tabsOrder[a.ID]
-		pB, existsB := tabsOrder[b.ID]
-
-		if !existsA {
-			pA = -1
-		}
-		if !existsB {
-			pB = -1
-		}
-
-		return cmp.Compare(pA, pB)
-	})
 }

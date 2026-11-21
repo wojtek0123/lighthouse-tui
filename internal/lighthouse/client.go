@@ -2,13 +2,16 @@
 package lighthouse
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -121,6 +124,46 @@ const (
 	HiddenGroup AuditGroup = "hidden"
 )
 
+const (
+	// PoorThreshold is the upper bound (exclusive) for poor Lighthouse scores (0.0 to less than 0.5).
+	PoorThreshold = 0.5
+
+	// NeedImprovementThreshold is the upper bound (exclusive) for needs-improvement scores (0.5 to less than 0.9).
+	NeedImprovementThreshold = 0.9
+
+	// GoodThreshold is the upper bound (inclusive) for good Lighthouse scores (0.9 to 1.0).
+	GoodThreshold = 1
+)
+
+// ScorePriority returns a rank integer where lower numbers appear higher in the list:
+// 0 = Poor (< 0.5)
+// 1 = Needs Improvement (0.5 - 0.89)
+// 2 = Good (0.9 - 1.0)
+// 3 = Informative/N/A (nil).
+func (a Audit) ScorePriority() int {
+	if a.Score == nil {
+		return 3
+	}
+
+	switch {
+	case *a.Score >= NeedImprovementThreshold:
+		return 2
+	case *a.Score >= PoorThreshold:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// CategoryOrder maps each audit category to its zero-based display or sort priority.
+var CategoryOrder = map[CategoryID]int{
+	PerformanceCategoryID:     0,
+	AccessibilityCategoryID:   1,
+	BestPractisesCategoryID:   2,
+	SeoCategoryID:             3,
+	AgenticBrowsingCategoryID: 4,
+}
+
 // RunLighthouse starts lighthouse command in headless mode to get report for specific website.
 func RunLighthouse(ctx context.Context, url string) (*Result, error) {
 	cmd := exec.CommandContext(
@@ -172,6 +215,25 @@ func RunLighthouse(ctx context.Context, url string) (*Result, error) {
 		Report:     &report,
 		ReportName: filename,
 	}, nil
+}
+
+// categoryRank returns the sort position for id, placing unknown categories after known ones.
+func categoryRank(id CategoryID) int {
+	if rank, ok := CategoryOrder[id]; ok {
+		return rank
+	}
+	return math.MaxInt
+}
+
+// SortCategories sorts categories in place according to CategoryOrder,
+// placing unknown categories at the end and breaking ties by ID.
+func SortCategories(categories []Category) {
+	slices.SortFunc(categories, func(a, b Category) int {
+		if c := cmp.Compare(categoryRank(a.ID), categoryRank(b.ID)); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
 }
 
 func reportName() string {
