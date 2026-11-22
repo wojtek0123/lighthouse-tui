@@ -4916,3 +4916,7 @@ debug 2026/11/16 18:44:24 Logs are working
 debug 2026/11/16 18:44:24 Logs are working
 debug 2026/11/16 18:44:24 Logs are working
 debug 2026/11/16 18:44:24 Logs are working
+debug 2026/11/22 10:55:56 error getting reports from hostname: failed to read directory at /home/wojtek/.local/share/lighthouse-tui/reports/github.com: open /home/wojtek/.local/share/lighthouse-tui/reports/github.com: no such file or directory
+debug 2026/11/22 10:55:57 error getting reports from hostname: failed to read directory at /home/wojtek/.local/share/lighthouse-tui/reports/github.com: open /home/wojtek/.local/share/lighthouse-tui/reports/github.com: no such file or directory
+debug 2026/11/22 10:55:57 error getting reports from hostname: failed to read directory at /home/wojtek/.local/share/lighthouse-tui/reports/github.com: open /home/wojtek/.local/share/lighthouse-tui/reports/github.com: no such file or directory
+debug 2026/11/22 10:55:57 error getting reports from hostname: failed to read directory at /home/wojtek/.local/share/lighthouse-tui/reports/github.com: open /home/wojtek/.local/share/lighthouse-tui/reports/github.com: no such file or directory

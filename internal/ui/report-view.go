@@ -33,18 +33,26 @@ type progressMetric struct {
 // LighthouseMsg is a Bubble Tea message dispatched when lighthouse report is finished.
 type LighthouseMsg struct {
 	url    string
-	result *lighthouse.Result
+	report *lighthouse.Report
 	err    error
 }
 
 func getLighthouseReport(cmd *runningCmd, url string) tea.Cmd {
 	return func() tea.Msg {
-		result, err := lighthouse.RunLighthouse(cmd.ctx, url)
+		report, err := lighthouse.RunLighthouse(cmd.ctx, url)
+
+		if err != nil {
+			return LighthouseMsg{
+				url:    url,
+				report: nil,
+				err:    err,
+			}
+		}
 
 		return LighthouseMsg{
 			url:    url,
-			result: result,
-			err:    err,
+			report: report,
+			err:    nil,
 		}
 	}
 }

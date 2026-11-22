@@ -3,11 +3,13 @@ package ui
 import (
 	"context"
 	"net/url"
+	"path/filepath"
 	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
+	"github.com/wojtek0123/lighthouse-tui/internal/store"
 )
 
 const (
@@ -76,6 +78,8 @@ type Model struct {
 	reportsView   *ReportsView
 	modal         *URLModal
 
+	reportsStore *store.ReportStore
+
 	showModal bool
 	focused   Pane
 
@@ -90,7 +94,7 @@ type Model struct {
 }
 
 // InitialModel creates initial state of the app.
-func InitialModel() Model {
+func InitialModel(reportsStore *store.ReportStore) Model {
 	urls, err := lighthouse.GetHostnames()
 
 	if err != nil {
@@ -116,6 +120,7 @@ func InitialModel() Model {
 		focused:       hostnamesPane,
 		modal:         modal,
 		ready:         false,
+		reportsStore:  reportsStore,
 	}
 }
 
@@ -190,21 +195,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(getLighthouseReport(cmd, msg.URL), m.hostnamesView.spinner.Tick)
 	case LighthouseMsg:
 		if msg.err != nil {
+			m.error = msg.err
 			return m, nil
 		}
 
-		m.resultView.SetReport(msg.result.Report)
-		cmds = append(cmds, stopLoading(&m.hostnamesView.list, msg.url))
-
-		u, err := url.Parse(msg.url)
+		dir, err := store.DefaultDir()
 
 		if err != nil {
+			m.error = err
 			return m, nil
 		}
 
-		if item, ok := m.hostnamesView.list.SelectedItem().(HostnameItem); ok && item.hostname == u.Hostname() {
-			cmds = append(cmds, m.reportsView.InsertReport(msg.result.ReportName))
+		hostname, err := store.Hostname(*msg.report)
+
+		if err != nil {
+			m.error = err
+			return m, nil
 		}
+
+		path := filepath.Join(dir, hostname, "reports")
+		err = store.CreateDir(path)
+
+		if err != nil {
+			m.error = err
+			return m, nil
+		}
+
+		m.resultView.SetReport(msg.report)
+		cmds = append(cmds, stopLoading(&m.hostnamesView.list, msg.url))
+
+		// u, err := url.Parse(msg.url)
+
+		// if err != nil {
+		// 	return m, nil
+		// }
+
+		// if item, ok := m.hostnamesView.list.SelectedItem().(HostnameItem); ok && item.hostname == hostname {
+		// 	cmds = append(cmds, m.reportsView.InsertReport("test"))
+		// }
+
+		m.reportsStore.Save(*msg.report)
 
 		return m, tea.Batch(cmds...)
 	case tea.WindowSizeMsg:
@@ -247,6 +277,7 @@ func (m Model) View() tea.View {
 	v.MouseMode = tea.MouseModeCellMotion
 
 	if m.error != nil {
+		// TODO: user cannot leave this screen. It should be a modal.
 		v.SetContent(m.error.Error())
 
 		return v

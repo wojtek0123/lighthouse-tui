@@ -165,7 +165,7 @@ var CategoryOrder = map[CategoryID]int{
 }
 
 // RunLighthouse starts lighthouse command in headless mode to get report for specific website.
-func RunLighthouse(ctx context.Context, url string) (*Result, error) {
+func RunLighthouse(ctx context.Context, url string) (*Report, error) {
 	cmd := exec.CommandContext(
 		ctx,
 		"npx",
@@ -194,27 +194,12 @@ func RunLighthouse(ctx context.Context, url string) (*Result, error) {
 		return nil, fmt.Errorf("failed to get lighthouse report for %s: %w", url, err)
 	}
 
-	filename := reportName()
-
-	path, err := reportPath(url, filename)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get path to save report: %w", err)
-	}
-
 	var report Report
 	if err = json.Unmarshal(output, &report); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal report: %w", err)
 	}
 
-	if err = os.WriteFile(path, output, 0o600); err != nil {
-		return nil, fmt.Errorf("failed to write a report at %s: %w", path, err)
-	}
-
-	return &Result{
-		Report:     &report,
-		ReportName: filename,
-	}, nil
+	return &report, nil
 }
 
 // categoryRank returns the sort position for id, placing unknown categories after known ones.
