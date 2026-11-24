@@ -71,10 +71,11 @@ type paneSize struct {
 
 // Model represents app main type.
 type Model struct {
-	hostnamesView *HostnamesView
-	resultView    *ReportView
-	reportsView   *ReportsView
-	modal         *URLModal
+	hostnamesView  *HostnamesView
+	resultView     *ReportView
+	reportsView    *ReportsView
+	modal          *URLModal
+	reportListView *ReportListView
 
 	showModal bool
 	focused   Pane
@@ -110,12 +111,13 @@ func InitialModel() Model {
 	}
 
 	return Model{
-		hostnamesView: hostnamesView,
-		resultView:    resultView,
-		reportsView:   reportsView,
-		focused:       hostnamesPane,
-		modal:         modal,
-		ready:         false,
+		reportListView: NewReportListView(),
+		hostnamesView:  hostnamesView,
+		resultView:     resultView,
+		reportsView:    reportsView,
+		focused:        hostnamesPane,
+		modal:          modal,
+		ready:          false,
 	}
 }
 
@@ -216,6 +218,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.updateResultSize()
 	}
 
+	*m.reportListView, cmd = m.reportListView.Update(msg)
+	cmds = append(cmds, cmd)
+
 	if m.showModal {
 		*m.modal, cmd = m.modal.Update(msg)
 		cmds = append(cmds, cmd)
@@ -246,19 +251,23 @@ func (m Model) View() tea.View {
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 
-	if m.error != nil {
-		v.SetContent(m.error.Error())
-
-		return v
-	}
-
-	if m.showModal {
-		v.SetContent(m.modal.View(m.width, m.height))
-	} else {
-		v.SetContent(m.renderLayout())
-	}
+	v.SetContent(m.reportListView.View())
 
 	return v
+
+	// if m.error != nil {
+	// 	v.SetContent(m.error.Error())
+	//
+	// 	return v
+	// }
+	//
+	// if m.showModal {
+	// 	v.SetContent(m.modal.View(m.width, m.height))
+	// } else {
+	// 	v.SetContent(m.renderLayout())
+	// }
+	//
+	// return v
 }
 
 func (m Model) renderLayout() string {

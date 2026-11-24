@@ -1,0 +1,93 @@
+package ui
+
+import (
+	tea "charm.land/bubbletea/v2"
+	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
+)
+
+type ReportListView struct {
+	table components.Table
+}
+
+var headers = []components.TableHeader{
+	{Title: "hostname", Width: 20},
+	{Title: "Perf", Width: 10},
+	{Title: "A11Y", Width: 10},
+	{Title: "BP", Width: 10},
+	{Title: "SEO", Width: 10},
+}
+
+var rows = []components.TableRow{
+	{Title: "wojciechpietraszuk.vercel", Children: []components.TableChildRow{
+		{"/", "99", "99", "100", "98"},
+	}},
+	{Title: "github.com 1", Children: []components.TableChildRow{
+		{"/test", "99", "99", "100", "98"},
+	}},
+	{Title: "github.com 2", Children: []components.TableChildRow{}},
+	{Title: "github.com 3", Children: []components.TableChildRow{}},
+	{Title: "github.com 4", Children: []components.TableChildRow{}},
+	{Title: "github.com 5", Children: []components.TableChildRow{}},
+	{Title: "github.com 6", Children: []components.TableChildRow{}},
+	{Title: "github.com 7", Children: []components.TableChildRow{}},
+	{Title: "github.com 8", Children: []components.TableChildRow{}},
+	{Title: "github.com 9", Children: []components.TableChildRow{}},
+	{Title: "github.com 10", Children: []components.TableChildRow{}},
+	{Title: "github.com 11", Children: []components.TableChildRow{
+		{"/test", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+	}},
+	{Title: "github.com 12", Children: []components.TableChildRow{}},
+	{Title: "github.com 13", Children: []components.TableChildRow{}},
+	{Title: "github.com 14", Children: []components.TableChildRow{}},
+	{Title: "github.com 15", Children: []components.TableChildRow{}},
+	{Title: "github.com 16", Children: []components.TableChildRow{}},
+	{Title: "github.com 17", Children: []components.TableChildRow{}},
+	{Title: "github.com 18", Children: []components.TableChildRow{
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+	}},
+	{Title: "github.com 19", Children: []components.TableChildRow{}},
+	{Title: "github.com 20", Children: []components.TableChildRow{}},
+	{Title: "github.com 21", Children: []components.TableChildRow{}},
+	{Title: "github.com 22", Children: []components.TableChildRow{}},
+	{Title: "github.com 23", Children: []components.TableChildRow{}},
+	{Title: "github.com 24", Children: []components.TableChildRow{}},
+	{Title: "github.com 25", Children: []components.TableChildRow{}},
+}
+
+var children = []components.TableChildRow{
+	{"/", "99", "99", "100", "98"},
+}
+
+func NewReportListView() *ReportListView {
+	table := components.NewTable()
+
+	table.SetHeaders(headers)
+	table.SetRows(rows)
+
+	return &ReportListView{
+		table: table,
+	}
+}
+
+func (v ReportListView) Update(msg tea.Msg) (ReportListView, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		v.table.SetWidth(msg.Width)
+		v.table.SetHeight(msg.Height)
+	}
+
+	v.table, cmd = v.table.Update(msg)
+
+	return v, cmd
+}
+
+func (v ReportListView) View() string {
+	return v.table.View()
+}
