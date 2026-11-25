@@ -6,7 +6,7 @@ import (
 )
 
 type ReportListView struct {
-	table components.Table
+	table *components.Table
 }
 
 var headers = []components.TableHeader{
@@ -24,8 +24,13 @@ var rows = []components.TableRow{
 	{Title: "github.com 1", Children: []components.TableChildRow{
 		{"/test", "99", "99", "100", "98"},
 	}},
-	{Title: "github.com 2", Children: []components.TableChildRow{}},
-	{Title: "github.com 3", Children: []components.TableChildRow{}},
+	{Title: "github.com 2", Children: []components.TableChildRow{
+		{"/test", "99", "99", "100", "98"},
+	}},
+	{Title: "github.com 3", Children: []components.TableChildRow{
+		{"/test", "99", "99", "100", "98"},
+		{"/test", "99", "99", "100", "98"},
+	}},
 	{Title: "github.com 4", Children: []components.TableChildRow{}},
 	{Title: "github.com 5", Children: []components.TableChildRow{}},
 	{Title: "github.com 6", Children: []components.TableChildRow{}},
@@ -52,15 +57,66 @@ var rows = []components.TableRow{
 	}},
 	{Title: "github.com 19", Children: []components.TableChildRow{}},
 	{Title: "github.com 20", Children: []components.TableChildRow{}},
-	{Title: "github.com 21", Children: []components.TableChildRow{}},
-	{Title: "github.com 22", Children: []components.TableChildRow{}},
-	{Title: "github.com 23", Children: []components.TableChildRow{}},
-	{Title: "github.com 24", Children: []components.TableChildRow{}},
-	{Title: "github.com 25", Children: []components.TableChildRow{}},
-}
-
-var children = []components.TableChildRow{
-	{"/", "99", "99", "100", "98"},
+	{Title: "github.com 21", Children: []components.TableChildRow{
+		{"/test", "99", "99", "100", "98"},
+	}},
+	{Title: "github.com 22", Children: []components.TableChildRow{
+		{"/test", "99", "99", "100", "98"},
+		{"/test", "99", "99", "100", "98"},
+	}},
+	{Title: "github.com 23", Children: []components.TableChildRow{
+		{"/test", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+		{"/test", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+		{"/test", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+		{"/test", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+		{"/test", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+		{"/test", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+		{"/test", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+		{"/test", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+		{"/test", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+		{"/test", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+		{"/test", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+		{"/test2", "99", "99", "100", "98"},
+		{"/test3", "99", "99", "100", "98"},
+	}},
+	{Title: "github.com 24", Children: []components.TableChildRow{
+		{"/test1", "99", "99", "100", "98"},
+	}},
+	{Title: "github.com 25", Children: []components.TableChildRow{
+		{"/test1", "99", "99", "100", "98"},
+		{"/test1", "99", "99", "100", "98"},
+	}},
 }
 
 func NewReportListView() *ReportListView {
@@ -78,9 +134,9 @@ func (v ReportListView) Update(msg tea.Msg) (ReportListView, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		v.table.SetWidth(msg.Width)
-		v.table.SetHeight(msg.Height)
+	case ReportViewSizeMsg:
+		v.table.SetWidth(msg.width)
+		v.table.SetHeight(msg.height)
 	}
 
 	v.table, cmd = v.table.Update(msg)
