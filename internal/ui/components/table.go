@@ -2,7 +2,6 @@ package components
 
 import (
 	"math"
-	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -99,7 +98,7 @@ func (t Table) View() string {
 
 	body := lipgloss.JoinVertical(lipgloss.Top, rows...)
 
-	return lipgloss.JoinVertical(lipgloss.Top, strconv.Itoa(t.end), t.renderHeaders(), body)
+	return lipgloss.JoinVertical(lipgloss.Top, t.renderHeaders(), body)
 }
 
 func (t Table) renderHeaders() string {
