@@ -1,7 +1,6 @@
 package components
 
 import (
-	"log"
 	"math"
 	"strconv"
 
@@ -11,6 +10,7 @@ import (
 
 var (
 	highlightRowStyle = lipgloss.NewStyle().Background(lipgloss.Black)
+	cellStyle         = lipgloss.NewStyle().Padding(0, 1)
 )
 
 const (
@@ -22,7 +22,7 @@ type TableChildRow []string
 
 type TableRow struct {
 	expanded bool
-	Title    string
+	Values   []string
 	Children []TableChildRow
 }
 
@@ -73,14 +73,15 @@ func (t *Table) Update(msg tea.Msg) (*Table, tea.Cmd) {
 				t.selectChild(t.cursor)
 			} else {
 				t.Toggle(t.cursor)
-				// t.updateVisible()
 			}
 		case "j", "down":
 			t.MoveUp()
-			t.updateVisible()
 		case "k", "up":
 			t.MoveDown()
-			t.updateVisible()
+		case "G":
+			t.MoveBottom()
+		case "g":
+			t.MoveTop()
 		}
 	}
 
@@ -102,10 +103,12 @@ func (t Table) View() string {
 }
 
 func (t Table) renderHeaders() string {
-	headers := make([]string, 0, len(t.headers))
+	headers := make([]string, 1, len(t.headers))
+
+	headers[0] = cellStyle.Render(" ")
 
 	for _, h := range t.headers {
-		headers = append(headers, lipgloss.NewStyle().Width(h.Width).Height(1).Padding(0, 1).Render(h.Title))
+		headers = append(headers, cellStyle.Width(h.Width).Height(1).Padding(0, 1).Render(h.Title))
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Left, headers...)
@@ -128,30 +131,34 @@ func (t Table) renderRowAt(i int) string {
 }
 
 func (t Table) renderRow(row flatRow) string {
+	widths := t.headerWidths()
+	cells := make([]string, 1, len(t.headers)+1)
 
-	return lipgloss.JoinHorizontal(lipgloss.Left,
-		lipgloss.NewStyle().Width(1).Padding(0, 1).Render(rowIcon(row.parent.expanded)),
-		lipgloss.NewStyle().Height(1).Padding(0, 1).Render(row.parent.Title),
-	)
-}
+	icon := arrowRight
 
-func rowIcon(expanded bool) string {
-	if expanded {
-		return arrowDown
+	if row.parent.expanded {
+		icon = arrowDown
 	}
 
-	return arrowRight
+	cells[0] = cellStyle.Render(icon)
+
+	values := padSlice(row.parent.Values, len(t.headers))
+
+	for i, cell := range values {
+		cells = append(cells, cellStyle.Width(widths[i]).Render(cell))
+	}
+
+	return lipgloss.JoinHorizontal(lipgloss.Left, cells...)
 }
 
 func (t Table) renderChildRow(row flatRow) string {
 	widths := t.headerWidths()
 	cells := make([]string, 1, len(t.headers)+1)
 
-	// first column is icon indicator
-	cells[0] = ""
+	cells[0] = lipgloss.NewStyle().Padding(0, 1).Render(" ")
 
 	for i, cell := range row.child {
-		cells = append(cells, lipgloss.NewStyle().Width(widths[i]).Height(1).Padding(0, 1).Render(cell))
+		cells = append(cells, cellStyle.Width(widths[i]).Render(cell))
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Left, cells...)
@@ -187,7 +194,7 @@ func (t *Table) SetRows(r []TableRow) {
 
 func (t *Table) Toggle(i int) {
 	t.rows[t.visible[i].parentIdx].expanded = !t.rows[t.visible[i].parentIdx].expanded
-	t.updateVisible()
+	t.UpdateVisible()
 }
 
 func (t *Table) SetWidth(w int) {
@@ -198,9 +205,8 @@ func (t *Table) SetHeight(h int) {
 	header := 1
 
 	t.height = h - header
-	// t.end = min(h-header, len(t.visible))
 	t.mid = int(math.Round(float64(h-header) / 2))
-	t.updateVisible()
+	t.UpdateVisible()
 }
 
 func (t *Table) MoveUp() {
@@ -209,6 +215,7 @@ func (t *Table) MoveUp() {
 	}
 
 	t.cursor = t.cursor + 1
+	t.UpdateViewport()
 }
 
 func (t *Table) MoveDown() {
@@ -217,6 +224,7 @@ func (t *Table) MoveDown() {
 	}
 
 	t.cursor = t.cursor - 1
+	t.UpdateVisible()
 }
 
 func (t *Table) flattenRows() {
@@ -234,10 +242,10 @@ func (t *Table) flattenRows() {
 	}
 
 	t.flatten = flatten
-	t.updateVisible()
+	t.UpdateVisible()
 }
 
-func (t *Table) updateVisible() {
+func (t *Table) UpdateVisible() {
 	t.visible = make([]*flatRow, 0, len(t.flatten))
 	for _, f := range t.flatten {
 		if !f.isChild || f.parent.expanded {
@@ -245,6 +253,10 @@ func (t *Table) updateVisible() {
 		}
 	}
 
+	t.UpdateViewport()
+}
+
+func (t *Table) UpdateViewport() {
 	count := len(t.visible)
 	t.cursor = clamp(t.cursor, 0, count)
 
@@ -270,8 +282,25 @@ func (t *Table) selectChild(i int) {
 	// return	t.visible[i].child
 }
 
+func (t *Table) MoveTop() {
+	t.cursor = 0
+	t.UpdateVisible()
+}
+
+func (t *Table) MoveBottom() {
+	t.cursor = len(t.visible) - 1
+	t.UpdateVisible()
+}
+
 func clamp(v, low, high int) int {
 	return min(max(v, low), high)
+}
+
+func padSlice(s []string, targetLen int) []string {
+	for len(s) < targetLen {
+		s = append(s, "")
+	}
+	return s
 }
 
 // var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
