@@ -7,6 +7,10 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// TODO:
+// - value truncation
+// - search
+
 var (
 	highlightRowStyle = lipgloss.NewStyle().Background(lipgloss.Black)
 	cellStyle         = lipgloss.NewStyle().Padding(0, 1)
@@ -17,16 +21,20 @@ const (
 	arrowDown  = "↓"
 )
 
+// ChildRowSelectionMsg distach selected child row.
 type ChildRowSelectionMsg struct{}
 
+// TableChildRow reprensents table child row with value per column.
 type TableChildRow []string
 
+// TableRow reprensents table parent row with expandable children.
 type TableRow struct {
 	expanded bool
 	Values   []string
 	Children []TableChildRow
 }
 
+// TableHeader reprensents table column header.
 type TableHeader struct {
 	Title string
 	Width int
@@ -39,6 +47,7 @@ type flatRow struct {
 	child     TableChildRow
 }
 
+// Table reprensents table model.
 type Table struct {
 	headers []TableHeader
 
@@ -52,6 +61,7 @@ type Table struct {
 	start, end, mid int
 }
 
+// NewTable creates new table instance.
 func NewTable() *Table {
 	return &Table{
 		headers: []TableHeader{},
@@ -65,13 +75,15 @@ func NewTable() *Table {
 	}
 }
 
+// Update keeps up-to-date table state.
 func (t *Table) Update(msg tea.Msg) (*Table, tea.Cmd) {
+	//nolint:gocritic //gocritic:singleCaseSwitch
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "enter", "space":
 			if t.visible[t.cursor].isChild {
-				t.selectChild(t.cursor)
+				t.selectChild()
 			} else {
 				t.Toggle(t.cursor)
 			}
@@ -91,6 +103,7 @@ func (t *Table) Update(msg tea.Msg) (*Table, tea.Cmd) {
 	return t, cmd
 }
 
+// View renders table layout.
 func (t Table) View() string {
 	rows := make([]string, 0, min(t.height, len(t.visible)))
 
@@ -175,10 +188,12 @@ func (t Table) headerWidths() []int {
 	return widths
 }
 
+// SetHeaders sets column headers in the table.
 func (t *Table) SetHeaders(h []TableHeader) {
 	t.headers = h
 }
 
+// SetRows sets available rows in the table.
 func (t *Table) SetRows(r []TableRow) {
 	t.rows = nil
 
@@ -193,15 +208,18 @@ func (t *Table) SetRows(r []TableRow) {
 	t.flattenRows()
 }
 
+// Toggle expands/collapses parent row.
 func (t *Table) Toggle(i int) {
 	t.rows[t.visible[i].parentIdx].expanded = !t.rows[t.visible[i].parentIdx].expanded
 	t.UpdateVisible()
 }
 
+// SetWidth sets width of the table.
 func (t *Table) SetWidth(w int) {
 	t.width = w
 }
 
+// SetHeight sets height of the table.
 func (t *Table) SetHeight(h int) {
 	header := 1
 
@@ -210,21 +228,35 @@ func (t *Table) SetHeight(h int) {
 	t.UpdateVisible()
 }
 
+// MoveUp increase position of cursor by 1.
 func (t *Table) MoveUp() {
 	if t.cursor == len(t.visible)-1 {
 		return
 	}
 
-	t.cursor = t.cursor + 1
+	t.cursor++
 	t.UpdateViewport()
 }
 
+// MoveDown decrease position of cursor by 1.
 func (t *Table) MoveDown() {
 	if t.cursor == 0 {
 		return
 	}
 
-	t.cursor = t.cursor - 1
+	t.cursor--
+	t.UpdateVisible()
+}
+
+// MoveTop sets cursor position to 0.
+func (t *Table) MoveTop() {
+	t.cursor = 0
+	t.UpdateVisible()
+}
+
+// MoveBottom sets cursor position to last visible row.
+func (t *Table) MoveBottom() {
+	t.cursor = len(t.visible) - 1
 	t.UpdateVisible()
 }
 
@@ -246,6 +278,7 @@ func (t *Table) flattenRows() {
 	t.UpdateVisible()
 }
 
+// UpdateVisible updates visible rows.
 func (t *Table) UpdateVisible() {
 	t.visible = make([]*flatRow, 0, len(t.flatten))
 	for _, f := range t.flatten {
@@ -257,19 +290,20 @@ func (t *Table) UpdateVisible() {
 	t.UpdateViewport()
 }
 
+// UpdateViewport updates range of visible rows.
 func (t *Table) UpdateViewport() {
 	count := len(t.visible)
 	t.cursor = clamp(t.cursor, 0, count)
 
-	if t.cursor >= t.mid && t.cursor <= count-t.mid {
+	switch {
+	case t.cursor >= t.mid && t.cursor <= count-t.mid:
 		diff := t.cursor - t.mid
-
 		t.start = clamp(diff, 0, t.cursor)
 		t.end = min(count, t.height+diff)
-	} else if t.cursor > count-t.mid && t.height < count {
+	case t.cursor > count-t.mid && t.height < count:
 		t.start = count - t.height
 		t.end = count
-	} else {
+	default:
 		t.start = clamp(t.cursor-t.mid, 0, t.cursor)
 		t.end = clamp(t.cursor+t.mid, min(t.height, count), count)
 	}
@@ -279,20 +313,10 @@ func (t *Table) UpdateViewport() {
 	}
 }
 
-func (t *Table) selectChild(i int) tea.Cmd {
+func (t *Table) selectChild() tea.Cmd {
 	return func() tea.Msg {
 		return ChildRowSelectionMsg{}
 	}
-}
-
-func (t *Table) MoveTop() {
-	t.cursor = 0
-	t.UpdateVisible()
-}
-
-func (t *Table) MoveBottom() {
-	t.cursor = len(t.visible) - 1
-	t.UpdateVisible()
 }
 
 func clamp(v, low, high int) int {

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 
 	tea "charm.land/bubbletea/v2"
@@ -210,6 +211,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() tea.View {
 	var v tea.View
 
+	if m.width < minTerminalWidth || m.height < minTerminalHeight {
+		v.SetContent(fmt.Sprintf("Terminal is too small %dx%d", m.width, m.height))
+		return v
+	}
+
 	if !m.ready {
 		v.SetContent("Initializing lighthouse tui...")
 
@@ -223,7 +229,9 @@ func (m Model) View() tea.View {
 		v.SetContent(m.error.Error())
 
 		return v
-	} else if m.showModal {
+	}
+
+	if m.showModal {
 		v.SetContent(m.modal.View(m.width, m.height))
 	} else {
 		v.SetContent(m.reportListView.View())
