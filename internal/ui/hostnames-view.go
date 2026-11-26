@@ -252,12 +252,12 @@ func (v HostnamesView) Update(msg tea.Msg) (HostnamesView, tea.Cmd) {
 	return v, tea.Batch(cmds...)
 }
 
-func (v HostnamesView) view(width, height int) string {
-	v.list.SetHeight(height)
-	v.list.SetWidth(width)
-
-	return v.list.View()
-}
+// func (v HostnamesView) view(width, height int) string {
+// 	v.list.SetHeight(height)
+// 	v.list.SetWidth(width)
+//
+// 	return v.list.View()
+// }
 
 func (v HostnamesView) setLoading(cmd *runningCmd, index int, loading bool) {
 	item, ok := v.list.Items()[index].(HostnameItem)
