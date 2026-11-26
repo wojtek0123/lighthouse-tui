@@ -5,11 +5,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
-
-// TODO:
-// - value truncation
-// - search
 
 var (
 	highlightRowStyle = lipgloss.NewStyle().Background(lipgloss.Black)
@@ -20,9 +17,6 @@ const (
 	arrowRight = "→"
 	arrowDown  = "↓"
 )
-
-// ChildRowSelectionMsg distach selected child row.
-type ChildRowSelectionMsg struct{}
 
 // TableChildRow reprensents table child row with value per column.
 type TableChildRow []string
@@ -81,12 +75,8 @@ func (t *Table) Update(msg tea.Msg) (*Table, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "enter", "space":
-			if t.visible[t.cursor].isChild {
-				t.selectChild()
-			} else {
-				t.Toggle(t.cursor)
-			}
+		case "space":
+			t.Toggle(t.cursor)
 		case "j", "down":
 			t.MoveUp()
 		case "k", "up":
@@ -159,7 +149,8 @@ func (t Table) renderRow(row flatRow) string {
 	values := padSlice(row.parent.Values, len(t.headers))
 
 	for i, cell := range values {
-		cells = append(cells, cellStyle.Width(widths[i]).Render(cell))
+		w := widths[i]
+		cells = append(cells, cellStyle.Width(w).Render(ansi.Truncate(cell, w, "…")))
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Left, cells...)
@@ -172,7 +163,8 @@ func (t Table) renderChildRow(row flatRow) string {
 	cells[0] = lipgloss.NewStyle().Padding(0, 1).Render(" ")
 
 	for i, cell := range row.child {
-		cells = append(cells, cellStyle.Width(widths[i]).Render(cell))
+		w := widths[i]
+		cells = append(cells, cellStyle.Width(w).Render(ansi.Truncate(cell, w, "…")))
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Left, cells...)
@@ -210,8 +202,42 @@ func (t *Table) SetRows(r []TableRow) {
 
 // Toggle expands/collapses parent row.
 func (t *Table) Toggle(i int) {
+	if t.visible[i].isChild {
+		return
+	}
+
 	t.rows[t.visible[i].parentIdx].expanded = !t.rows[t.visible[i].parentIdx].expanded
 	t.UpdateVisible()
+}
+
+// SelectedRow returns the selected row.
+func (t *Table) SelectedRow() (TableRow, bool) {
+	if t.cursor < 0 || t.cursor >= len(t.visible) {
+		return TableRow{}, false
+	}
+
+	r := t.visible[t.cursor]
+
+	if r.isChild {
+		return TableRow{}, false
+	}
+
+	return *r.parent, true
+}
+
+// SelectedChildRow returns the selected child row
+func (t *Table) SelectedChildRow() TableChildRow {
+	if t.cursor < 0 || t.cursor >= len(t.visible) {
+		return nil
+	}
+
+	r := t.visible[t.cursor]
+
+	if !r.isChild {
+		return nil
+	}
+
+	return r.child
 }
 
 // SetWidth sets width of the table.
@@ -310,12 +336,6 @@ func (t *Table) UpdateViewport() {
 
 	if t.end > count {
 		t.end = count
-	}
-}
-
-func (t *Table) selectChild() tea.Cmd {
-	return func() tea.Msg {
-		return ChildRowSelectionMsg{}
 	}
 }
 
