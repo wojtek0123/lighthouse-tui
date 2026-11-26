@@ -17,6 +17,8 @@ const (
 	arrowDown  = "↓"
 )
 
+type ChildRowSelectionMsg struct{}
+
 type TableChildRow []string
 
 type TableRow struct {
@@ -277,8 +279,10 @@ func (t *Table) UpdateViewport() {
 	}
 }
 
-func (t *Table) selectChild(i int) {
-	// return	t.visible[i].child
+func (t *Table) selectChild(i int) tea.Cmd {
+	return func() tea.Msg {
+		return ChildRowSelectionMsg{}
+	}
 }
 
 func (t *Table) MoveTop() {

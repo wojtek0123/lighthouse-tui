@@ -131,14 +131,6 @@ func NewReportListView() *ReportListView {
 
 func (v ReportListView) Update(msg tea.Msg) (ReportListView, tea.Cmd) {
 	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case ReportViewSizeMsg:
-		v.table.SetWidth(msg.width)
-		v.table.SetHeight(msg.height)
-		v.UpdateHeaders(msg.width)
-	}
-
 	v.table, cmd = v.table.Update(msg)
 
 	return v, cmd
@@ -158,4 +150,10 @@ func (v *ReportListView) UpdateHeaders(width int) {
 
 func (v ReportListView) View() string {
 	return v.table.View()
+}
+
+func (v *ReportListView) SetSize(w, h int) {
+	v.table.SetWidth(w)
+	v.table.SetHeight(h)
+	v.UpdateHeaders(w)
 }

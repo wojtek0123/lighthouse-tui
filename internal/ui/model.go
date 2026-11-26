@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"net/url"
-	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -46,29 +45,6 @@ type ActivePaneMsg struct {
 	pane Pane
 }
 
-// Layout represents structure of app view.
-type Layout string
-
-const (
-	// DualColumn 2 columns total (Sidebar with stacked lists + Main result view).
-	DualColumn Layout = "dual-column"
-
-	// TripleColumn 3 columns total (Hostname column + Report column + Result view column).
-	TripleColumn Layout = "triple-column"
-
-	// SingleColumn 1 column total (All elements stacked vertically for mobile/narrow viewports).
-	SingleColumn Layout = "single-column"
-)
-
-type paneSize struct {
-	reportListWidth,
-	reportListHeight,
-	hostnameListWidth,
-	hostnameListHeight,
-	resultWidth,
-	resultHeight int
-}
-
 // Model represents app main type.
 type Model struct {
 	hostnamesView  *HostnamesView
@@ -83,9 +59,6 @@ type Model struct {
 	ready  bool
 	width  int
 	height int
-
-	layout   Layout
-	paneSize *paneSize
 
 	error error
 }
@@ -210,12 +183,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, tea.Batch(cmds...)
 	case tea.WindowSizeMsg:
-		m.ready = true
-		m.width = msg.Width
-		m.height = msg.Height
-		m.layout, m.paneSize = calculatePanesSize(msg.Width, msg.Height)
-
-		return m, m.updateResultSize()
+		m.setWindowSize(msg.Width, msg.Height)
 	}
 
 	*m.reportListView, cmd = m.reportListView.Update(msg)
@@ -251,46 +219,24 @@ func (m Model) View() tea.View {
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 
-	v.SetContent(m.reportListView.View())
+	if m.error != nil {
+		v.SetContent(m.error.Error())
+
+		return v
+	} else if m.showModal {
+		v.SetContent(m.modal.View(m.width, m.height))
+	} else {
+		v.SetContent(m.reportListView.View())
+	}
 
 	return v
-
-	// if m.error != nil {
-	// 	v.SetContent(m.error.Error())
-	//
-	// 	return v
-	// }
-	//
-	// if m.showModal {
-	// 	v.SetContent(m.modal.View(m.width, m.height))
-	// } else {
-	// 	v.SetContent(m.renderLayout())
-	// }
-	//
-	// return v
 }
 
-func (m Model) renderLayout() string {
-	if m.width < minTerminalWidth || m.height < minTerminalHeight {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, lipgloss.JoinVertical(lipgloss.Center, "Window is too small", lipgloss.JoinHorizontal(lipgloss.Center, strconv.Itoa(m.width), "x", strconv.Itoa(m.height))))
-	}
-
-	hostnameListView := RenderPane("[0] Hostnames", m.hostnamesView.view(m.paneSize.hostnameListWidth, m.paneSize.hostnameListHeight), m.paneSize.hostnameListWidth, m.paneSize.hostnameListHeight, m.focused == hostnamesPane)
-	reportsView := RenderPane("[1] Reports", m.reportsView.View(m.paneSize.reportListHeight), m.paneSize.reportListWidth, m.paneSize.reportListHeight, m.focused == reportsPane)
-	resultView := RenderPane("[2] Result", m.resultView.View(), m.paneSize.resultWidth, m.paneSize.resultHeight, m.focused == resultPane)
-
-	switch m.layout {
-	case SingleColumn:
-		return lipgloss.JoinVertical(lipgloss.Top, hostnameListView, reportsView, resultView)
-	case DualColumn:
-		sidePanelView := lipgloss.NewStyle().Height(m.height).Render(lipgloss.JoinVertical(lipgloss.Top, hostnameListView, reportsView))
-
-		return lipgloss.JoinHorizontal(lipgloss.Top, sidePanelView, resultView)
-	case TripleColumn:
-		return lipgloss.JoinHorizontal(lipgloss.Top, hostnameListView, reportsView, resultView)
-	default:
-		return ""
-	}
+func (m *Model) setWindowSize(w, h int) {
+	m.ready = true
+	m.width = w
+	m.height = h
+	m.reportListView.SetSize(w, h)
 }
 
 func (m *Model) setActivePane(pane Pane) tea.Cmd {
@@ -300,59 +246,6 @@ func (m *Model) setActivePane(pane Pane) tea.Cmd {
 	return func() tea.Msg {
 		return ActivePaneMsg{
 			pane: pane,
-		}
-	}
-}
-
-func calculatePanesSize(w, h int) (Layout, *paneSize) {
-	if w > 150 {
-		firstColumnWidth := w / 5
-		secondColumnWidth := w / 5
-		thirdColumnWidth := w - firstColumnWidth - secondColumnWidth
-
-		return TripleColumn, &paneSize{
-			hostnameListWidth:  firstColumnWidth,
-			hostnameListHeight: h - 2,
-			reportListWidth:    secondColumnWidth,
-			reportListHeight:   h - 2,
-			resultWidth:        thirdColumnWidth,
-			resultHeight:       h - 2,
-		}
-	} else if w > 100 {
-		leftPaneWidth := w / 3
-		leftTopPaneHeight := (h / 2) - 2
-		leftBottomPaneHeight := h - leftTopPaneHeight - 4
-		rightPaneWidth := w - leftPaneWidth
-
-		return DualColumn, &paneSize{
-			hostnameListWidth:  leftPaneWidth,
-			hostnameListHeight: leftTopPaneHeight,
-			reportListWidth:    leftPaneWidth,
-			reportListHeight:   leftBottomPaneHeight,
-			resultWidth:        rightPaneWidth,
-			resultHeight:       h - 2,
-		}
-	}
-
-	firstRowHeight := h / 5
-	secondRowHeight := h / 5
-	thirstRowHeight := h - firstRowHeight - secondRowHeight
-
-	return SingleColumn, &paneSize{
-		hostnameListWidth:  w,
-		hostnameListHeight: firstRowHeight,
-		reportListWidth:    w,
-		reportListHeight:   secondRowHeight,
-		resultWidth:        w,
-		resultHeight:       thirstRowHeight,
-	}
-}
-
-func (m *Model) updateResultSize() tea.Cmd {
-	return func() tea.Msg {
-		return ReportViewSizeMsg{
-			width:  m.paneSize.resultWidth,
-			height: m.paneSize.resultHeight,
 		}
 	}
 }
