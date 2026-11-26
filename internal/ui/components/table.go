@@ -225,7 +225,7 @@ func (t *Table) SelectedRow() (TableRow, bool) {
 	return *r.parent, true
 }
 
-// SelectedChildRow returns the selected child row
+// SelectedChildRow returns the selected child row.
 func (t *Table) SelectedChildRow() TableChildRow {
 	if t.cursor < 0 || t.cursor >= len(t.visible) {
 		return nil
