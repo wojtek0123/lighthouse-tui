@@ -189,7 +189,7 @@ func (t *Table) SetHeaders(h []TableHeader) {
 func (t *Table) SetRows(r []TableRow) {
 	t.rows = nil
 
-	for i := 0; i < len(r); i++ {
+	for i := range r {
 		r[i].expanded = false
 	}
 
