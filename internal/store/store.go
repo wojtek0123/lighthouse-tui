@@ -5,8 +5,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-
-	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
 
 const app = "lighthouse-tui"
@@ -28,8 +26,8 @@ func DefaultDir() (string, error) {
 }
 
 // Hostname returns hostname of a fetched url report.
-func Hostname(r lighthouse.Report) (string, error) {
-	u, err := url.Parse(r.FinalURL)
+func Hostname(rawUrl string) (string, error) {
+	u, err := url.Parse(rawUrl)
 
 	if err != nil {
 		return "", fmt.Errorf("failed to parse report url %w", err)

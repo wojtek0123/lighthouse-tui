@@ -35,8 +35,9 @@ func run() (err error) {
 	}
 
 	reportsStore := store.NewReportStore(dir)
+	summariesStore := store.NewSummaryStore(dir)
 
-	p := tea.NewProgram(ui.InitialModel(reportsStore))
+	p := tea.NewProgram(ui.InitialModel(reportsStore, summariesStore))
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v\n", err)

@@ -374,3 +374,13 @@ func RemoveHostname(hostname string) error {
 
 	return nil
 }
+
+func (r *Report) Metrics() map[CategoryID]int {
+	return map[CategoryID]int{
+		PerformanceCategoryID:     int(math.Round(r.Categories[PerformanceCategoryID].Score)),
+		AccessibilityCategoryID:   int(math.Round(r.Categories[AccessibilityCategoryID].Score)),
+		BestPractisesCategoryID:   int(math.Round(r.Categories[BestPractisesCategoryID].Score)),
+		SeoCategoryID:             int(math.Round(r.Categories[SeoCategoryID].Score)),
+		AgenticBrowsingCategoryID: int(math.Round(r.Categories[AgenticBrowsingCategoryID].Score)),
+	}
+}

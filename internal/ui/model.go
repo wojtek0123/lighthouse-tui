@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"path/filepath"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -43,6 +43,10 @@ type ReportViewSizeMsg struct {
 	width, height int
 }
 
+type SummariesLoadedMsg struct {
+	summaries store.Summaries
+}
+
 // ActivePaneMsg is a Bubble Tea message dispatched when active pane changed.
 type ActivePaneMsg struct {
 	pane Pane
@@ -56,7 +60,8 @@ type Model struct {
 	modal          *URLModal
 	reportListView *ReportListView
 
-	reportsStore *store.ReportStore
+	reportsStore   *store.ReportStore
+	summariesStore *store.SummaryStore
 
 	showModal bool
 	focused   Pane
@@ -69,7 +74,7 @@ type Model struct {
 }
 
 // InitialModel creates initial state of the app.
-func InitialModel(reportsStore *store.ReportStore) Model {
+func InitialModel(reportsStore *store.ReportStore, summariesStore *store.SummaryStore) Model {
 	urls, err := lighthouse.GetHostnames()
 
 	if err != nil {
@@ -93,12 +98,23 @@ func InitialModel(reportsStore *store.ReportStore) Model {
 		modal:          modal,
 		ready:          false,
 		reportsStore:   reportsStore,
+		summariesStore: summariesStore,
 	}
 }
 
 // Init returns tea.Cmd to keep up to date others views.
 func (m Model) Init() tea.Cmd {
-	return nil
+	summaries, err := m.summariesStore.List()
+
+	if err != nil {
+		return ThrowError(err)
+	}
+
+	return func() tea.Msg {
+		return SummariesLoadedMsg{
+			summaries: summaries,
+		}
+	}
 }
 
 // Update is running in loop to keep state up to date.
@@ -171,27 +187,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		dir, err := store.DefaultDir()
+		id := "unique"
+		createdAt, err := time.Parse("", msg.report.FetchTime)
 
 		if err != nil {
-			m.error = err
+			m.error = msg.err
 			return m, nil
 		}
 
-		hostname, err := store.Hostname(*msg.report)
-
-		if err != nil {
-			m.error = err
-			return m, nil
+		summary := store.Summary{
+			ID:        id,
+			URL:       msg.report.FinalURL,
+			CreatedAt: createdAt,
+			Scores: store.Score{
+				Performance:     msg.report.Metrics()[lighthouse.PerformanceCategoryID],
+				Accessibility:   msg.report.Metrics()[lighthouse.AccessibilityCategoryID],
+				BestPractices:   msg.report.Metrics()[lighthouse.BestPractisesCategoryID],
+				SEO:             msg.report.Metrics()[lighthouse.SeoCategoryID],
+				AgenticBrowsing: msg.report.Metrics()[lighthouse.AgenticBrowsingCategoryID],
+			},
 		}
 
-		path := filepath.Join(dir, hostname, "reports")
-		err = store.CreateDir(path)
+		m.summariesStore.Save(&summary)
 
-		if err != nil {
-			m.error = err
-			return m, nil
-		}
+		// dir, err := store.DefaultDir()
+
+		// if err != nil {
+		// 	m.error = err
+		// 	return m, nil
+		// }
+
+		// hostname, err := store.Hostname(*msg.report)
+
+		// if err != nil {
+		// 	m.error = err
+		// 	return m, nil
+		// }
+
+		// path := filepath.Join(dir, hostname, "reports")
+		// err = store.CreateDir(path)
+
+		// if err != nil {
+		// 	m.error = err
+		// 	return m, nil
+		// }
 
 		m.resultView.SetReport(msg.report)
 		cmds = append(cmds, stopLoading(&m.hostnamesView.list, msg.url))
@@ -206,7 +245,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 	cmds = append(cmds, m.reportsView.InsertReport("test"))
 		// }
 
-		m.reportsStore.Save(*msg.report)
+		m.reportsStore.Save(id, *msg.report)
 
 		return m, tea.Batch(cmds...)
 	case tea.WindowSizeMsg:
