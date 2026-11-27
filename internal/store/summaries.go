@@ -6,13 +6,17 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
+	"uuid"
 )
 
+// SummaryStore represents store state.
 type SummaryStore struct {
 	dir string
 }
 
+// Score represents field in summary which holds basic score of lighthouse categories.
 type Score struct {
 	Performance     int `json:"performance"`
 	Accessibility   int `json:"accessibility"`
@@ -21,19 +25,23 @@ type Score struct {
 	AgenticBrowsing int `json:"agentic_browsing"`
 }
 
+// Summary represents basic metadata about a lighthouse report.
 type Summary struct {
-	ID        string    `json:"id"`
+	ID        uuid.UUID `json:"id"`
 	URL       string    `json:"url"`
 	CreatedAt time.Time `json:"created_at"`
 	Scores    Score     `json:"scores"`
 }
 
+// Summaries represents slice of summaries.
 type Summaries []Summary
 
+// NewSummaryStore creates summary store instance.
 func NewSummaryStore(dir string) *SummaryStore {
 	return &SummaryStore{dir: dir}
 }
 
+// Save writes file with summary.json suffix on local disk.
 func (s *SummaryStore) Save(summary *Summary) error {
 	data, err := json.Marshal(summary)
 
@@ -41,18 +49,23 @@ func (s *SummaryStore) Save(summary *Summary) error {
 		return fmt.Errorf("failed to marshal summary %w", err)
 	}
 
-	if err := os.WriteFile(s.dir, data, writePermission); err != nil {
+	if err := os.WriteFile(filepath.Join(s.dir, summary.ID.String()+".summary.json"), data, writePermission); err != nil {
 		return fmt.Errorf("failed to save report summary %w", err)
 	}
 
 	return nil
 }
 
+// List returns slice of summaries which are saved on local disk.
 func (s *SummaryStore) List() (Summaries, error) {
 	entries, err := os.ReadDir(filepath.Join(s.dir, "*.summary.json"))
 
 	if err != nil {
 		return nil, err
+	}
+
+	if len(entries) == 0 {
+		return Summaries{}, nil
 	}
 
 	summaries := make(Summaries, 0, len(entries))
@@ -74,6 +87,7 @@ func (s *SummaryStore) List() (Summaries, error) {
 	return summaries, nil
 }
 
+// Delete deletes summary by ID.
 func (s *SummaryStore) Delete(ID string) error {
 	if err := os.Remove(filepath.Join(s.dir, ID+".summary.json")); err != nil {
 		return err
@@ -81,6 +95,7 @@ func (s *SummaryStore) Delete(ID string) error {
 	return nil
 }
 
+// Load reads summary from saved json file on local disk.
 func (s *SummaryStore) Load(path string) (Summary, error) {
 	data, err := os.ReadFile(path)
 
@@ -96,6 +111,7 @@ func (s *SummaryStore) Load(path string) (Summary, error) {
 	return summary, nil
 }
 
+// Path returns path from summary.
 func (s Summary) Path() string {
 	u, err := url.Parse(s.URL)
 
@@ -106,6 +122,7 @@ func (s Summary) Path() string {
 	return u.Path
 }
 
+// Hostname returns hostname of a summary url.
 func (s Summary) Hostname() string {
 	u, err := url.Parse(s.URL)
 
@@ -116,6 +133,7 @@ func (s Summary) Hostname() string {
 	return u.Hostname()
 }
 
+// GroupByHostname groups summaries by hostname.
 func (ss Summaries) GroupByHostname() map[string]Summaries {
 	summaryByHostname := map[string]Summaries{}
 
@@ -124,4 +142,11 @@ func (ss Summaries) GroupByHostname() map[string]Summaries {
 	}
 
 	return summaryByHostname
+}
+
+// SortByCreatedAt sort summaries by created at field.
+func (ss Summaries) Sort() {
+	slices.SortFunc(ss, func(i, j Summary) int {
+		return i.CreatedAt.Compare(j.CreatedAt)
+	})
 }

@@ -34,10 +34,8 @@ func run() (err error) {
 		return fmt.Errorf("failed to get default dir %w", err)
 	}
 
-	reportsStore := store.NewReportStore(dir)
-	summariesStore := store.NewSummaryStore(dir)
-
-	p := tea.NewProgram(ui.InitialModel(reportsStore, summariesStore))
+	store.CreateDir(dir)
+	p := tea.NewProgram(ui.InitialModel(dir))
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v\n", err)

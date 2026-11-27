@@ -153,6 +153,8 @@ func (v *ReportListView) updateTableRows(summariesByHostname map[string]store.Su
 	rows := make([]components.TableRow, 0, len(summariesByHostname))
 
 	for hostname, summaries := range summariesByHostname {
+		summaries.Sort()
+
 		row := components.TableRow{
 			Values: []string{hostname},
 		}
@@ -169,6 +171,7 @@ func (v *ReportListView) updateTableRows(summariesByHostname map[string]store.Su
 			})
 		}
 
+		row.Children = children
 		rows = append(rows, row)
 	}
 }

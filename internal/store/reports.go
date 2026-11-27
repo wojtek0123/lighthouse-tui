@@ -6,9 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
-	"strings"
-	"time"
+	"uuid"
 
 	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
 )
@@ -25,14 +23,14 @@ func NewReportStore(dir string) *ReportStore {
 }
 
 // Save stores a report on local disk in app dir.
-func (s *ReportStore) Save(ID string, r lighthouse.Report) error {
+func (s *ReportStore) Save(ID uuid.UUID, r lighthouse.Report) error {
 	data, err := json.Marshal(r)
 
 	if err != nil {
 		return fmt.Errorf("failed to marshal report %w", err)
 	}
 
-	path := filepath.Join(s.dir, "reports", ID+"."+reportFileExtension)
+	path := filepath.Join(s.dir, ID.String()+".report.json")
 
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("failed to save report %w", err)
@@ -123,56 +121,4 @@ func getReports(path string) ([]lighthouse.Report, error) {
 	}
 
 	return reports, nil
-}
-
-const idTimeLayout = "2006-01-02T15-04-05Z" // RFC3339 in UTC, colons replaced
-
-var idFormat = regexp.MustCompile(
-	`^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z_[a-z0-9]([a-z0-9.-]*[a-z0-9])?$`)
-
-// NewReportID creates a id for report file name
-func NewReportID(now time.Time, rawURL string) (string, error) {
-	host, err := Hostname(rawURL)
-
-	if err != nil {
-		return "", err
-	}
-
-	id := now.UTC().Format(idTimeLayout) + "_" + host
-
-	if err := ValidateReportID(id); err != nil {
-		return "", err
-	}
-
-	return id, nil
-}
-
-// ParseID splits an ID like "2026-11-21T14-30-05Z_example.com"
-// into its timestamp and host.
-func ParseReportID(id string) (time.Time, string, error) {
-	if err := ValidateReportID(id); err != nil {
-		return time.Time{}, "", err
-	}
-
-	ts, host, ok := strings.Cut(id, "_")
-
-	if !ok {
-		return time.Time{}, "", fmt.Errorf("invalid report id %q: missing separator", id)
-	}
-
-	t, err := time.Parse(idTimeLayout, ts)
-
-	if err != nil {
-		return time.Time{}, "", fmt.Errorf("invalid report id %q: %w", id, err)
-	}
-
-	return t, host, nil
-}
-
-func ValidateReportID(id string) error {
-	if len(id) > 128 || !idFormat.MatchString(id) {
-		return fmt.Errorf("invalid report id %q", id)
-	}
-
-	return nil
 }

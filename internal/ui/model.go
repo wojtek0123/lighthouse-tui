@@ -3,8 +3,8 @@ package ui
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"time"
+	"uuid"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -54,9 +54,7 @@ type ActivePaneMsg struct {
 
 // Model represents app main type.
 type Model struct {
-	hostnamesView  *HostnamesView
 	resultView     *ReportView
-	reportsView    *ReportsView
 	modal          *URLModal
 	reportListView *ReportListView
 
@@ -74,22 +72,9 @@ type Model struct {
 }
 
 // InitialModel creates initial state of the app.
-func InitialModel(reportsStore *store.ReportStore, summariesStore *store.SummaryStore) Model {
-	urls, err := lighthouse.GetHostnames()
-
-	if err != nil {
-		return Model{
-			error: err,
-		}
-	}
-
+func InitialModel(dir string) Model {
 	resultView := NewReportView()
 	modal := NewURLModal()
-
-	if len(urls) > 0 {
-		// reportsView.GetReports(urls[0])
-		resultView.SetHostname(urls[0])
-	}
 
 	return Model{
 		reportListView: NewReportListView(),
@@ -97,8 +82,8 @@ func InitialModel(reportsStore *store.ReportStore, summariesStore *store.Summary
 		focused:        hostnamesPane,
 		modal:          modal,
 		ready:          false,
-		reportsStore:   reportsStore,
-		summariesStore: summariesStore,
+		reportsStore:   store.NewReportStore(dir),
+		summariesStore: store.NewSummaryStore(dir),
 	}
 }
 
@@ -146,48 +131,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			return m, m.setActivePane(m.focused)
-		case "0":
-			m.focused = hostnamesPane
-			return m, m.setActivePane(hostnamesPane)
-		case "1":
-			m.focused = reportsPane
-			return m, m.setActivePane(reportsPane)
-		case "2":
-			if m.focused != reportsPane {
-				return m, nil
-			}
-
-			m.focused = resultPane
-			return m, m.setActivePane(resultPane)
 		}
 	case CloseModalMsg:
 		m.showModal = false
 		return m, nil
-	case EnteredURLMsg:
-		ctx, cancel := context.WithCancel(context.Background())
+	// case EnteredURLMsg:
+	// ctx, cancel := context.WithCancel(context.Background())
 
-		cmd := &runningCmd{ctx: ctx, cancel: cancel}
+	// cmd := &runningCmd{ctx: ctx, cancel: cancel}
+	//
+	// u, err := url.Parse(msg.URL)
+	// if err != nil {
+	// 	return m, nil
+	// }
 
-		u, err := url.Parse(msg.URL)
-		if err != nil {
-			return m, nil
-		}
-
-		return m, tea.Batch(getLighthouseReport(cmd, msg.URL), addUniqueHostname(&m.hostnamesView.list, HostnameItem{hostname: u.Hostname(), loading: true, cmd: cmd}), m.hostnamesView.spinner.Tick)
-	case RestartMsg:
-		ctx, cancel := context.WithCancel(context.Background())
-		cmd := &runningCmd{ctx: ctx, cancel: cancel}
-
-		m.hostnamesView.setLoading(cmd, msg.Index, true)
-
-		return m, tea.Batch(getLighthouseReport(cmd, msg.URL), m.hostnamesView.spinner.Tick)
+	// 	return m, tea.Batch(getLighthouseReport(cmd, msg.URL), addUniqueHostname(&m.hostnamesView.list, HostnameItem{hostname: u.Hostname(), loading: true, cmd: cmd}), m.hostnamesView.spinner.Tick)
+	// case RestartMsg:
+	// 	ctx, cancel := context.WithCancel(context.Background())
+	// 	cmd := &runningCmd{ctx: ctx, cancel: cancel}
+	//
+	// 	m.hostnamesView.setLoading(cmd, msg.Index, true)
+	//
+	// 	return m, tea.Batch(getLighthouseReport(cmd, msg.URL), m.hostnamesView.spinner.Tick)
 	case LighthouseMsg:
 		if msg.err != nil {
 			m.error = msg.err
 			return m, nil
 		}
 
-		id := "unique"
 		createdAt, err := time.Parse("", msg.report.FetchTime)
 
 		if err != nil {
@@ -195,6 +166,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		id := uuid.NewV7()
 		summary := store.Summary{
 			ID:        id,
 			URL:       msg.report.FinalURL,
@@ -210,40 +182,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.summariesStore.Save(&summary)
 
-		// dir, err := store.DefaultDir()
-
-		// if err != nil {
-		// 	m.error = err
-		// 	return m, nil
-		// }
-
-		// hostname, err := store.Hostname(*msg.report)
-
-		// if err != nil {
-		// 	m.error = err
-		// 	return m, nil
-		// }
-
-		// path := filepath.Join(dir, hostname, "reports")
-		// err = store.CreateDir(path)
-
-		// if err != nil {
-		// 	m.error = err
-		// 	return m, nil
-		// }
-
 		m.resultView.SetReport(msg.report)
-		cmds = append(cmds, stopLoading(&m.hostnamesView.list, msg.url))
-
-		// u, err := url.Parse(msg.url)
-
-		// if err != nil {
-		// 	return m, nil
-		// }
-
-		// if item, ok := m.hostnamesView.list.SelectedItem().(HostnameItem); ok && item.hostname == hostname {
-		// 	cmds = append(cmds, m.reportsView.InsertReport("test"))
-		// }
+		// cmds = append(cmds, stopLoading(&m.hostnamesView.list, msg.url))
 
 		m.reportsStore.Save(id, *msg.report)
 
@@ -259,11 +199,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		*m.modal, cmd = m.modal.Update(msg)
 		cmds = append(cmds, cmd)
 	} else {
-		*m.hostnamesView, cmd = m.hostnamesView.Update(msg)
-		cmds = append(cmds, cmd)
-
-		*m.reportsView, cmd = m.reportsView.Update(msg)
-		cmds = append(cmds, cmd)
+		// *m.hostnamesView, cmd = m.hostnamesView.Update(msg)
+		// cmds = append(cmds, cmd)
+		//
+		// *m.reportsView, cmd = m.reportsView.Update(msg)
+		// cmds = append(cmds, cmd)
 
 		*m.resultView, cmd = m.resultView.Update(msg)
 		cmds = append(cmds, cmd)
@@ -314,8 +254,8 @@ func (m *Model) setWindowSize(w, h int) {
 }
 
 func (m *Model) setActivePane(pane Pane) tea.Cmd {
-	m.reportsView.SetActive(m.focused == reportsPane)
-	m.hostnamesView.setActive(m.focused == hostnamesPane)
+	// m.reportsView.SetActive(m.focused == reportsPane)
+	// m.hostnamesView.setActive(m.focused == hostnamesPane)
 
 	return func() tea.Msg {
 		return ActivePaneMsg{
