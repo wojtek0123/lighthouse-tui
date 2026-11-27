@@ -1,6 +1,6 @@
 module github.com/wojtek0123/lighthouse-tui
 
-go 1.26.6
+go 1.27.4
 
 require (
 	charm.land/bubbles/v2 v2.2.1
