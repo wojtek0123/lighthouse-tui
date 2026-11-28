@@ -8,7 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
+	"github.com/wojtek0123/lighthouse-tui/internal/report"
 	"github.com/wojtek0123/lighthouse-tui/internal/store"
 )
 
@@ -43,6 +43,7 @@ type ReportViewSizeMsg struct {
 	width, height int
 }
 
+// SummariesLoadedMsg is a Bubble Tea message dispatched when summary is loaded.
 type SummariesLoadedMsg struct {
 	summaries store.Summaries
 }
@@ -54,7 +55,7 @@ type ActivePaneMsg struct {
 
 // Model represents app main type.
 type Model struct {
-	resultView     *ReportView
+	reportView     *ReportView
 	modal          *URLModal
 	reportListView *ReportListView
 
@@ -73,16 +74,15 @@ type Model struct {
 
 // InitialModel creates initial state of the app.
 func InitialModel(dir string) Model {
-	resultView := NewReportView()
-	modal := NewURLModal()
+	reportStore := store.NewReportStore(dir)
 
 	return Model{
 		reportListView: NewReportListView(),
-		resultView:     resultView,
+		reportView:     NewReportView(reportStore),
 		focused:        hostnamesPane,
-		modal:          modal,
+		modal:          NewURLModal(),
 		ready:          false,
-		reportsStore:   store.NewReportStore(dir),
+		reportsStore:   reportStore,
 		summariesStore: store.NewSummaryStore(dir),
 	}
 }
@@ -135,17 +135,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CloseModalMsg:
 		m.showModal = false
 		return m, nil
-	// case EnteredURLMsg:
-	// ctx, cancel := context.WithCancel(context.Background())
+	case EnteredURLMsg:
+		//nolint:gosec // TODO: handle cancellation
+		ctx, cancel := context.WithCancel(context.Background())
+		cmd := &runningCmd{ctx: ctx, cancel: cancel}
 
-	// cmd := &runningCmd{ctx: ctx, cancel: cancel}
-	//
-	// u, err := url.Parse(msg.URL)
-	// if err != nil {
-	// 	return m, nil
-	// }
-
-	// 	return m, tea.Batch(getLighthouseReport(cmd, msg.URL), addUniqueHostname(&m.hostnamesView.list, HostnameItem{hostname: u.Hostname(), loading: true, cmd: cmd}), m.hostnamesView.spinner.Tick)
+		return m, getLighthouseReport(cmd, msg.URL)
 	// case RestartMsg:
 	// 	ctx, cancel := context.WithCancel(context.Background())
 	// 	cmd := &runningCmd{ctx: ctx, cancel: cancel}
@@ -159,7 +154,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		createdAt, err := time.Parse("", msg.report.FetchTime)
+		r, err := report.Parse(msg.output)
+
+		if err != nil {
+			return m, ThrowError(err)
+		}
+
+		createdAt, err := time.Parse("", r.FetchTime)
 
 		if err != nil {
 			m.error = msg.err
@@ -169,43 +170,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		id := uuid.NewV7()
 		summary := store.Summary{
 			ID:        id,
-			URL:       msg.report.FinalURL,
+			URL:       r.FinalURL,
 			CreatedAt: createdAt,
 			Scores: store.Score{
-				Performance:     msg.report.Metrics()[lighthouse.PerformanceCategoryID],
-				Accessibility:   msg.report.Metrics()[lighthouse.AccessibilityCategoryID],
-				BestPractices:   msg.report.Metrics()[lighthouse.BestPractisesCategoryID],
-				SEO:             msg.report.Metrics()[lighthouse.SeoCategoryID],
-				AgenticBrowsing: msg.report.Metrics()[lighthouse.AgenticBrowsingCategoryID],
+				Performance:     r.Metrics()[report.PerformanceCategoryID],
+				Accessibility:   r.Metrics()[report.AccessibilityCategoryID],
+				BestPractices:   r.Metrics()[report.BestPractisesCategoryID],
+				SEO:             r.Metrics()[report.SeoCategoryID],
+				AgenticBrowsing: r.Metrics()[report.AgenticBrowsingCategoryID],
 			},
 		}
 
-		m.summariesStore.Save(&summary)
+		err = m.reportsStore.Save(id, msg.output)
 
-		m.resultView.SetReport(msg.report)
-		// cmds = append(cmds, stopLoading(&m.hostnamesView.list, msg.url))
+		if err != nil {
+			return m, ThrowError(err)
+		}
 
-		m.reportsStore.Save(id, *msg.report)
+		err = m.summariesStore.Save(&summary)
+
+		if err != nil {
+			return m, ThrowError(err)
+		}
+
+		m.reportView.SetReport(r)
 
 		return m, tea.Batch(cmds...)
 	case tea.WindowSizeMsg:
 		m.setWindowSize(msg.Width, msg.Height)
 	}
 
-	*m.reportListView, cmd = m.reportListView.Update(msg)
-	cmds = append(cmds, cmd)
-
 	if m.showModal {
 		*m.modal, cmd = m.modal.Update(msg)
 		cmds = append(cmds, cmd)
 	} else {
-		// *m.hostnamesView, cmd = m.hostnamesView.Update(msg)
-		// cmds = append(cmds, cmd)
-		//
-		// *m.reportsView, cmd = m.reportsView.Update(msg)
-		// cmds = append(cmds, cmd)
+		*m.reportListView, cmd = m.reportListView.Update(msg)
+		cmds = append(cmds, cmd)
 
-		*m.resultView, cmd = m.resultView.Update(msg)
+		*m.reportView, cmd = m.reportView.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 

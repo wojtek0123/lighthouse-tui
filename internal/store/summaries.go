@@ -61,7 +61,7 @@ func (s *SummaryStore) List() (Summaries, error) {
 	entries, err := os.ReadDir(filepath.Join(s.dir, "*.summary.json"))
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read summary files at application directory %w", err)
 	}
 
 	if len(entries) == 0 {
@@ -87,25 +87,41 @@ func (s *SummaryStore) List() (Summaries, error) {
 	return summaries, nil
 }
 
-// Delete deletes summary by ID.
-func (s *SummaryStore) Delete(ID string) error {
-	if err := os.Remove(filepath.Join(s.dir, ID+".summary.json")); err != nil {
-		return err
+// Delete deletes summary by id.
+func (s *SummaryStore) Delete(id string) error {
+	if err := os.Remove(filepath.Join(s.dir, id+".summary.json")); err != nil {
+		return fmt.Errorf("failed to delete summary with ID %s %w", id, err)
 	}
 	return nil
 }
 
-// Load reads summary from saved json file on local disk.
-func (s *SummaryStore) Load(path string) (Summary, error) {
-	data, err := os.ReadFile(path)
-
+// Load reads summary from a saved json file inside the store's base directory.
+func (s *SummaryStore) Load(name string) (Summary, error) {
+	root, err := os.OpenRoot(s.dir)
 	if err != nil {
-		return Summary{}, err
+		return Summary{}, fmt.Errorf("failed to open store dir %s: %w", s.dir, err)
 	}
 
+	defer func() {
+		if cerr := root.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close root: %w", cerr)
+		}
+	}()
+
+	f, err := root.Open(name)
+	if err != nil {
+		return Summary{}, fmt.Errorf("failed to open file %s: %w", name, err)
+	}
+
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close file: %w", cerr)
+		}
+	}()
+
 	var summary Summary
-	if err := json.Unmarshal(data, &summary); err != nil {
-		return Summary{}, err
+	if err := json.NewDecoder(f).Decode(&summary); err != nil {
+		return Summary{}, fmt.Errorf("failed to decode summary: %w", err)
 	}
 
 	return summary, nil
@@ -144,7 +160,7 @@ func (ss Summaries) GroupByHostname() map[string]Summaries {
 	return summaryByHostname
 }
 
-// SortByCreatedAt sort summaries by created at field.
+// Sort sort summaries by created at field.
 func (ss Summaries) Sort() {
 	slices.SortFunc(ss, func(i, j Summary) int {
 		return i.CreatedAt.Compare(j.CreatedAt)

@@ -27,7 +27,7 @@ func DefaultDir() (string, error) {
 // CreateDir creates dir with provided path.
 func CreateDir(path string) error {
 	if err := os.MkdirAll(path, makePermission); err != nil {
-		return fmt.Errorf("failed to create directory at %s for hostname: %w", path, err)
+		return fmt.Errorf("failed to create dir at %s %w", path, err)
 	}
 
 	return nil

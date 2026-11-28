@@ -34,7 +34,12 @@ func run() (err error) {
 		return fmt.Errorf("failed to get default dir %w", err)
 	}
 
-	store.CreateDir(dir)
+	err = store.CreateDir(dir)
+
+	if err != nil {
+		return fmt.Errorf("failed to create app default directory %w", err)
+	}
+
 	p := tea.NewProgram(ui.InitialModel(dir))
 
 	if _, err := p.Run(); err != nil {
