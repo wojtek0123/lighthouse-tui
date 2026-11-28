@@ -6,6 +6,7 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/wojtek0123/lighthouse-tui/internal/store"
 	"github.com/wojtek0123/lighthouse-tui/internal/ui"
 )
 
@@ -27,7 +28,19 @@ func run() (err error) {
 		}
 	}()
 
-	p := tea.NewProgram(ui.InitialModel())
+	dir, err := store.DefaultDir()
+
+	if err != nil {
+		return fmt.Errorf("failed to get default dir %w", err)
+	}
+
+	err = store.CreateDir(dir)
+
+	if err != nil {
+		return fmt.Errorf("failed to create app default directory %w", err)
+	}
+
+	p := tea.NewProgram(ui.InitialModel(dir))
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v\n", err)

@@ -12,7 +12,8 @@ import (
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
+	"github.com/wojtek0123/lighthouse-tui/internal/report"
+	"github.com/wojtek0123/lighthouse-tui/internal/store"
 	"github.com/wojtek0123/lighthouse-tui/internal/ui/components"
 )
 
@@ -32,37 +33,44 @@ type progressMetric struct {
 
 // LighthouseMsg is a Bubble Tea message dispatched when lighthouse report is finished.
 type LighthouseMsg struct {
-	url    string
-	result *lighthouse.Result
+	URL    string
+	output []byte
 	err    error
 }
 
 func getLighthouseReport(cmd *runningCmd, url string) tea.Cmd {
 	return func() tea.Msg {
-		result, err := lighthouse.RunLighthouse(cmd.ctx, url)
+		data, err := report.RunLighthouse(cmd.ctx, url)
+
+		if err != nil {
+			return LighthouseMsg{
+				URL:    url,
+				output: nil,
+				err:    err,
+			}
+		}
 
 		return LighthouseMsg{
-			url:    url,
-			result: result,
-			err:    err,
+			URL:    url,
+			output: data,
+			err:    nil,
 		}
 	}
 }
 
 // ReportView represents the view model for displaying report results.
 type ReportView struct {
-	activeTab lighthouse.CategoryID
+	activeTab report.CategoryID
 	active    bool
 
-	categories []lighthouse.Category
+	categories []report.Category
 
 	err            error
-	report         *lighthouse.Report
+	report         *report.Report
 	metrics        []progressMetric
 	overviewScores []progressMetric
 
-	hostname   string
-	reportName string
+	reportStore *store.ReportStore
 
 	showHeader bool
 	header     *ReportHeader
@@ -74,7 +82,7 @@ type ReportView struct {
 }
 
 // NewReportView creates result view.
-func NewReportView() *ReportView {
+func NewReportView(reportStore *store.ReportStore) *ReportView {
 	tabs := components.NewTabs()
 	table := table.New(
 		table.WithFocused(true),
@@ -82,12 +90,13 @@ func NewReportView() *ReportView {
 	header := NewReportHeader()
 
 	return &ReportView{
-		tabs:       tabs,
-		table:      table,
-		active:     false,
-		report:     nil,
-		header:     header,
-		showHeader: true,
+		tabs:        tabs,
+		table:       table,
+		active:      false,
+		report:      nil,
+		header:      header,
+		showHeader:  true,
+		reportStore: reportStore,
 	}
 }
 
@@ -145,27 +154,40 @@ func (v ReportView) Update(msg tea.Msg) (ReportView, tea.Cmd) {
 		v.active = active
 		v.table.Focus()
 		return v, nil
-	case HostnameSelectedMsg:
-		v.hostname = msg.hostname
-		v.reportName = ""
-	case ReportSelectedMsg:
-		if v.hostname != "" {
-			v.reportName = msg.reportName
+	case SelectReportMsg:
+		r, err := v.reportStore.Load(msg.ID)
 
-			report, err := lighthouse.GetReport(v.hostname, v.reportName)
-
-			if err != nil {
-				v.err = err
-			}
-
-			err = v.initView(*report)
-
-			if err != nil {
-				v.err = err
-			}
-
-			return v, nil
+		if err != nil {
+			return v, ThrowError(err)
 		}
+
+		err = v.initView(*r)
+
+		if err != nil {
+			return v, ThrowError(err)
+		}
+
+		// case HostnameSelectedMsg:
+		// 	v.hostname = msg.hostname
+		// 	v.reportName = ""
+		// case ReportSelectedMsg:
+		// 	if v.hostname != "" {
+		// 		v.reportName = msg.reportName
+		//
+		// 		report, err := report.GetReport(v.hostname, v.reportName)
+		//
+		// 		if err != nil {
+		// 			v.err = err
+		// 		}
+		//
+		// 		err = v.initView(*report)
+		//
+		// 		if err != nil {
+		// 			v.err = err
+		// 		}
+		//
+		// 		return v, nil
+		// 	}
 	}
 
 	v.table, cmd = v.table.Update(msg)
@@ -173,11 +195,11 @@ func (v ReportView) Update(msg tea.Msg) (ReportView, tea.Cmd) {
 	return v, cmd
 }
 
-func (v *ReportView) initView(report lighthouse.Report) error {
+func (v *ReportView) initView(report report.Report) error {
 	categories := slices.Collect(maps.Values(report.Categories))
 	tabs := make([]string, 0, len(categories))
 
-	lighthouse.SortCategories(categories)
+	// report.SortCategories(categories)
 
 	for _, c := range categories {
 		tabs = append(tabs, c.Title)
@@ -199,7 +221,7 @@ func (v *ReportView) initView(report lighthouse.Report) error {
 }
 
 // SetActiveTab sets which tab is currently active.
-func (v *ReportView) SetActiveTab(tab lighthouse.CategoryID) {
+func (v *ReportView) SetActiveTab(tab report.CategoryID) {
 	v.activeTab = tab
 }
 
@@ -297,7 +319,7 @@ func (v *ReportView) buildAudits() error {
 				audit.Title,
 			}
 
-			if v.activeTab == lighthouse.PerformanceCategoryID || v.activeTab == lighthouse.AgenticBrowsingCategoryID {
+			if v.activeTab == report.PerformanceCategoryID || v.activeTab == report.AgenticBrowsingCategoryID {
 				row = table.Row{priority, indicator, audit.DisplayValue, ref.Group, audit.Title}
 			}
 
@@ -322,14 +344,14 @@ func (v *ReportView) buildAudits() error {
 	return nil
 }
 
-func buildColumns(activeTab lighthouse.CategoryID, width int) []table.Column {
+func buildColumns(activeTab report.CategoryID, width int) []table.Column {
 	columns := []table.Column{
 		{Title: "", Width: 1},
 		{Title: "Category", Width: 30},
 		{Title: "Name", Width: width - 39},
 	}
 
-	if activeTab == lighthouse.PerformanceCategoryID || activeTab == lighthouse.AgenticBrowsingCategoryID {
+	if activeTab == report.PerformanceCategoryID || activeTab == report.AgenticBrowsingCategoryID {
 		columns = slices.Insert(columns, 1, table.Column{Title: "Savings", Width: 26})
 		columns[3].Width = width - 67
 	}
@@ -337,15 +359,15 @@ func buildColumns(activeTab lighthouse.CategoryID, width int) []table.Column {
 	return columns
 }
 
-func scoreIndicator(a lighthouse.Audit) string {
+func scoreIndicator(a report.Audit) string {
 	if a.Score == nil {
 		return missingIndicatorStyle.Render("○")
 	}
 
 	switch {
-	case *a.Score >= lighthouse.NeedImprovementThreshold:
+	case *a.Score >= report.NeedImprovementThreshold:
 		return goodIndicatorStyle.Render("●")
-	case *a.Score >= lighthouse.PoorThreshold:
+	case *a.Score >= report.PoorThreshold:
 		return averageIndicatorStyle.Render("■")
 	default:
 		return poorIndicatorStyle.Render("▲")
@@ -362,9 +384,9 @@ func renderProgressMetrics(metrics []progressMetric, w int) string {
 	for _, metric := range metrics {
 		color := lipgloss.Red
 
-		if metric.score >= lighthouse.NeedImprovementThreshold {
+		if metric.score >= report.NeedImprovementThreshold {
 			color = lipgloss.Green
-		} else if metric.score >= lighthouse.PoorThreshold {
+		} else if metric.score >= report.PoorThreshold {
 			color = lipgloss.Yellow
 		}
 
@@ -412,12 +434,7 @@ func RenderPane(header, content string, width, height int, focus bool) string {
 	return lipgloss.NewStyle().Width(width).Height(height).Render(lipgloss.JoinVertical(lipgloss.Left, topBorder, body))
 }
 
-// SetHostname sets which hostname is focus from HostnamesView.
-func (v *ReportView) SetHostname(hostname string) {
-	v.hostname = hostname
-}
-
 // SetReport sets lighthouse report.
-func (v *ReportView) SetReport(r *lighthouse.Report) {
+func (v *ReportView) SetReport(r *report.Report) {
 	v.report = r
 }

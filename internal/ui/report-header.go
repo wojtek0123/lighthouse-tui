@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"charm.land/lipgloss/v2"
-	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
+	"github.com/wojtek0123/lighthouse-tui/internal/report"
 )
 
 var labelStyle = lipgloss.NewStyle().Foreground(lipgloss.BrightBlack).MarginRight(2)
@@ -29,7 +29,7 @@ func NewReportHeader() *ReportHeader {
 }
 
 // Init initializes report header class.
-func (r *ReportHeader) Init(report lighthouse.Report, categories []lighthouse.Category) {
+func (r *ReportHeader) Init(report report.Report, categories []report.Category) {
 	n := len(categories) + 2
 	labels := make([]string, 0, n)
 	values := make([]string, 0, n)

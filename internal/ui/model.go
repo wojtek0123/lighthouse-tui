@@ -3,11 +3,13 @@ package ui
 import (
 	"context"
 	"fmt"
-	"net/url"
+	"time"
+	"uuid"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/wojtek0123/lighthouse-tui/internal/lighthouse"
+	"github.com/wojtek0123/lighthouse-tui/internal/report"
+	"github.com/wojtek0123/lighthouse-tui/internal/store"
 )
 
 const (
@@ -41,6 +43,11 @@ type ReportViewSizeMsg struct {
 	width, height int
 }
 
+// SummariesLoadedMsg is a Bubble Tea message dispatched when summary is loaded.
+type SummariesLoadedMsg struct {
+	summaries store.Summaries
+}
+
 // ActivePaneMsg is a Bubble Tea message dispatched when active pane changed.
 type ActivePaneMsg struct {
 	pane Pane
@@ -48,11 +55,12 @@ type ActivePaneMsg struct {
 
 // Model represents app main type.
 type Model struct {
-	hostnamesView  *HostnamesView
-	resultView     *ReportView
-	reportsView    *ReportsView
+	reportView     *ReportView
 	modal          *URLModal
 	reportListView *ReportListView
+
+	reportsStore   *store.ReportStore
+	summariesStore *store.SummaryStore
 
 	showModal bool
 	focused   Pane
@@ -65,39 +73,33 @@ type Model struct {
 }
 
 // InitialModel creates initial state of the app.
-func InitialModel() Model {
-	urls, err := lighthouse.GetHostnames()
-
-	if err != nil {
-		return Model{
-			error: err,
-		}
-	}
-
-	hostnamesView := newHostnamesView(true)
-	resultView := NewReportView()
-	reportsView := NewReportsView(false)
-	modal := NewURLModal()
-
-	if len(urls) > 0 {
-		reportsView.GetReports(urls[0])
-		resultView.SetHostname(urls[0])
-	}
+func InitialModel(dir string) Model {
+	reportStore := store.NewReportStore(dir)
 
 	return Model{
 		reportListView: NewReportListView(),
-		hostnamesView:  hostnamesView,
-		resultView:     resultView,
-		reportsView:    reportsView,
+		reportView:     NewReportView(reportStore),
 		focused:        hostnamesPane,
-		modal:          modal,
+		modal:          NewURLModal(),
 		ready:          false,
+		reportsStore:   reportStore,
+		summariesStore: store.NewSummaryStore(dir),
 	}
 }
 
 // Init returns tea.Cmd to keep up to date others views.
 func (m Model) Init() tea.Cmd {
-	return nil
+	summaries, err := m.summariesStore.List()
+
+	if err != nil {
+		return ThrowError(err)
+	}
+
+	return func() tea.Msg {
+		return SummariesLoadedMsg{
+			summaries: summaries,
+		}
+	}
 }
 
 // Update is running in loop to keep state up to date.
@@ -129,78 +131,83 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			return m, m.setActivePane(m.focused)
-		case "0":
-			m.focused = hostnamesPane
-			return m, m.setActivePane(hostnamesPane)
-		case "1":
-			m.focused = reportsPane
-			return m, m.setActivePane(reportsPane)
-		case "2":
-			if m.focused != reportsPane {
-				return m, nil
-			}
-
-			m.focused = resultPane
-			return m, m.setActivePane(resultPane)
 		}
 	case CloseModalMsg:
 		m.showModal = false
 		return m, nil
 	case EnteredURLMsg:
-		ctx, cancel := context.WithCancel(context.Background())
-
-		cmd := &runningCmd{ctx: ctx, cancel: cancel}
-
-		u, err := url.Parse(msg.URL)
-		if err != nil {
-			return m, nil
-		}
-
-		return m, tea.Batch(getLighthouseReport(cmd, msg.URL), addUniqueHostname(&m.hostnamesView.list, HostnameItem{hostname: u.Hostname(), loading: true, cmd: cmd}), m.hostnamesView.spinner.Tick)
-	case RestartMsg:
+		//nolint:gosec // TODO: handle cancellation
 		ctx, cancel := context.WithCancel(context.Background())
 		cmd := &runningCmd{ctx: ctx, cancel: cancel}
 
-		m.hostnamesView.setLoading(cmd, msg.Index, true)
-
-		return m, tea.Batch(getLighthouseReport(cmd, msg.URL), m.hostnamesView.spinner.Tick)
+		return m, getLighthouseReport(cmd, msg.URL)
+	// case RestartMsg:
+	// 	ctx, cancel := context.WithCancel(context.Background())
+	// 	cmd := &runningCmd{ctx: ctx, cancel: cancel}
+	//
+	// 	m.hostnamesView.setLoading(cmd, msg.Index, true)
+	//
+	// 	return m, tea.Batch(getLighthouseReport(cmd, msg.URL), m.hostnamesView.spinner.Tick)
 	case LighthouseMsg:
 		if msg.err != nil {
+			m.error = msg.err
 			return m, nil
 		}
 
-		m.resultView.SetReport(msg.result.Report)
-		cmds = append(cmds, stopLoading(&m.hostnamesView.list, msg.url))
-
-		u, err := url.Parse(msg.url)
+		r, err := report.Parse(msg.output)
 
 		if err != nil {
+			return m, ThrowError(err)
+		}
+
+		createdAt, err := time.Parse("", r.FetchTime)
+
+		if err != nil {
+			m.error = msg.err
 			return m, nil
 		}
 
-		if item, ok := m.hostnamesView.list.SelectedItem().(HostnameItem); ok && item.hostname == u.Hostname() {
-			cmds = append(cmds, m.reportsView.InsertReport(msg.result.ReportName))
+		id := uuid.NewV7()
+		summary := store.Summary{
+			ID:        id,
+			URL:       r.FinalURL,
+			CreatedAt: createdAt,
+			Scores: store.Score{
+				Performance:     r.Metrics()[report.PerformanceCategoryID],
+				Accessibility:   r.Metrics()[report.AccessibilityCategoryID],
+				BestPractices:   r.Metrics()[report.BestPractisesCategoryID],
+				SEO:             r.Metrics()[report.SeoCategoryID],
+				AgenticBrowsing: r.Metrics()[report.AgenticBrowsingCategoryID],
+			},
 		}
+
+		err = m.reportsStore.Save(id, msg.output)
+
+		if err != nil {
+			return m, ThrowError(err)
+		}
+
+		err = m.summariesStore.Save(&summary)
+
+		if err != nil {
+			return m, ThrowError(err)
+		}
+
+		m.reportView.SetReport(r)
 
 		return m, tea.Batch(cmds...)
 	case tea.WindowSizeMsg:
 		m.setWindowSize(msg.Width, msg.Height)
 	}
 
-	*m.reportListView, cmd = m.reportListView.Update(msg)
-	cmds = append(cmds, cmd)
-
 	if m.showModal {
 		*m.modal, cmd = m.modal.Update(msg)
 		cmds = append(cmds, cmd)
 	} else {
-		*m.hostnamesView, cmd = m.hostnamesView.Update(msg)
+		*m.reportListView, cmd = m.reportListView.Update(msg)
 		cmds = append(cmds, cmd)
 
-		*m.reportsView, cmd = m.reportsView.Update(msg)
-		cmds = append(cmds, cmd)
-
-		*m.resultView, cmd = m.resultView.Update(msg)
+		*m.reportView, cmd = m.reportView.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 
@@ -226,6 +233,7 @@ func (m Model) View() tea.View {
 	v.MouseMode = tea.MouseModeCellMotion
 
 	if m.error != nil {
+		// TODO: user cannot leave this screen. It should be a modal.
 		v.SetContent(m.error.Error())
 
 		return v
@@ -248,8 +256,8 @@ func (m *Model) setWindowSize(w, h int) {
 }
 
 func (m *Model) setActivePane(pane Pane) tea.Cmd {
-	m.reportsView.SetActive(m.focused == reportsPane)
-	m.hostnamesView.setActive(m.focused == hostnamesPane)
+	// m.reportsView.SetActive(m.focused == reportsPane)
+	// m.hostnamesView.setActive(m.focused == hostnamesPane)
 
 	return func() tea.Msg {
 		return ActivePaneMsg{

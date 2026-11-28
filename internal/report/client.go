@@ -1,5 +1,5 @@
-// Package lighthouse provides based operations to generate lighthouse report, save report and get reports.
-package lighthouse
+// Package report provides based operations to generate lighthouse report, save report and get reports.
+package report
 
 import (
 	"cmp"
@@ -7,17 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"net/url"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
-	"strings"
 	"syscall"
 	"time"
 )
-
-const appName string = "lighthouse-tui"
 
 // CategoryID represents core web vitals category ID in lighthouse report.
 type CategoryID string
@@ -165,7 +159,7 @@ var CategoryOrder = map[CategoryID]int{
 }
 
 // RunLighthouse starts lighthouse command in headless mode to get report for specific website.
-func RunLighthouse(ctx context.Context, url string) (*Result, error) {
+func RunLighthouse(ctx context.Context, url string) ([]byte, error) {
 	cmd := exec.CommandContext(
 		ctx,
 		"npx",
@@ -194,27 +188,18 @@ func RunLighthouse(ctx context.Context, url string) (*Result, error) {
 		return nil, fmt.Errorf("failed to get lighthouse report for %s: %w", url, err)
 	}
 
-	filename := reportName()
+	return output, nil
+}
 
-	path, err := reportPath(url, filename)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get path to save report: %w", err)
-	}
-
+// Parse parses lighthouse output to report struct.
+func Parse(data []byte) (*Report, error) {
 	var report Report
-	if err = json.Unmarshal(output, &report); err != nil {
+
+	if err := json.Unmarshal(data, &report); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal report: %w", err)
 	}
 
-	if err = os.WriteFile(path, output, 0o600); err != nil {
-		return nil, fmt.Errorf("failed to write a report at %s: %w", path, err)
-	}
-
-	return &Result{
-		Report:     &report,
-		ReportName: filename,
-	}, nil
+	return &report, nil
 }
 
 // categoryRank returns the sort position for id, placing unknown categories after known ones.
@@ -236,156 +221,13 @@ func SortCategories(categories []Category) {
 	})
 }
 
-func reportName() string {
-	now := time.Now().Format(time.RFC3339)
-	name := fmt.Sprintf("report-%s.json", now)
-
-	return name
-}
-
-func reportPath(enteredURL string, fileName string) (string, error) {
-	// now := time.Now().Format(time.RFC3339)
-	// file := fmt.Sprintf("report-%s.json", now)
-	home, err := os.UserHomeDir()
-
-	if err != nil {
-		return "", fmt.Errorf("failed to get user home directory: %w", err)
+// Metrics return score of basic report metrics.
+func (r *Report) Metrics() map[CategoryID]int {
+	return map[CategoryID]int{
+		PerformanceCategoryID:     int(math.Round(r.Categories[PerformanceCategoryID].Score) * 100),
+		AccessibilityCategoryID:   int(math.Round(r.Categories[AccessibilityCategoryID].Score) * 100),
+		BestPractisesCategoryID:   int(math.Round(r.Categories[BestPractisesCategoryID].Score) * 100),
+		SeoCategoryID:             int(math.Round(r.Categories[SeoCategoryID].Score) * 100),
+		AgenticBrowsingCategoryID: int(math.Round(r.Categories[AgenticBrowsingCategoryID].Score) * 100),
 	}
-
-	u, err := url.Parse(enteredURL)
-
-	if err != nil {
-		return "", fmt.Errorf("failed to parse %s: %w", enteredURL, err)
-	}
-
-	// [ ] Handle other os
-	base := filepath.Join(home, ".local", "share")
-	dir := filepath.Join(base, appName, "reports", u.Host)
-
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return "", fmt.Errorf("failed to create directory at %s for hostname: %w", dir, err)
-	}
-
-	return filepath.Join(dir, fileName), nil
-}
-
-// GetReports returns list of saved reports for given hostname.
-func GetReports(hostname string) ([]string, error) {
-	home, err := os.UserHomeDir()
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	base := filepath.Join(home, ".local", "share")
-	dir := filepath.Join(base, appName, "reports", hostname)
-
-	entries, err := os.ReadDir(dir)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to read directory at %s: %w", dir, err)
-	}
-
-	fileNames := []string{}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			fileNames = append(fileNames, entry.Name())
-		}
-	}
-
-	return fileNames, nil
-}
-
-// GetReport returns unmarshaled lighthouse report based on hostname and report file name.
-func GetReport(hostname, reportName string) (*Report, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	baseDir := filepath.Join(home, ".local", "share", appName, "reports")
-
-	// 1. Resolve absolute paths to handle relative components and symlinks securely
-	absBase, err := filepath.Abs(baseDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve base dir: %w", err)
-	}
-
-	absTarget, err := filepath.Abs(filepath.Join(absBase, hostname, reportName))
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve target path: %w", err)
-	}
-
-	// 2. Mathematically prove the target is inside the base directory using filepath.Rel
-	rel, err := filepath.Rel(absBase, absTarget)
-	if err != nil || strings.HasPrefix(rel, "..") || rel == "." {
-		return nil, fmt.Errorf("invalid path traversal attempt: %s / %s", hostname, reportName)
-	}
-
-	// 3. Read the file, explicitly telling gosec we have validated the path safely
-	output, err := os.ReadFile(absTarget) // #nosec G304
-	// Why this works:
-	//
-	// - Runtime Safety: filepath.Rel plus the .. check completely blocks path traversal attacks (like ../../etc/passwd) at runtime, even if someone passes malicious input.
-	//
-	// - Linter Compliance: The // #nosec G304 directive tells gosec to back off, satisfying the static analysis check without sacrificing actual security.
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to read report: %w", err)
-	}
-
-	var report Report
-
-	if err = json.Unmarshal(output, &report); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal report: %w", err)
-	}
-
-	return &report, nil
-}
-
-// GetHostnames returns a slice of all hostname directories found in the app's reports storage.
-func GetHostnames() ([]string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	base := filepath.Join(home, ".local", "share")
-	dir := filepath.Join(base, appName, "reports")
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []string{}, nil
-		}
-		return nil, fmt.Errorf("failed to read directory at %s: %w", dir, err)
-	}
-
-	hostnames := []string{}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			hostnames = append(hostnames, entry.Name())
-		}
-	}
-
-	return hostnames, nil
-}
-
-// RemoveHostname removes given hostname directory with all saved reports.
-func RemoveHostname(hostname string) error {
-	home, err := os.UserHomeDir()
-
-	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	base := filepath.Join(home, ".local", "share")
-	path := filepath.Join(base, appName, "reports", hostname)
-
-	if err = os.RemoveAll(path); err != nil {
-		return fmt.Errorf("failed to remove report directory at %s: %w", path, err)
-	}
-
-	return nil
 }

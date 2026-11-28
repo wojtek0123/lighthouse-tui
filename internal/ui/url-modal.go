@@ -77,7 +77,7 @@ func NewURLModal() *URLModal {
 func (m URLModal) Update(msg tea.Msg) (URLModal, tea.Cmd) {
 	var cmd tea.Cmd
 
-	//nolint:gocritic // keeping switch structure for future key cases
+	//nolint:gocritic
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
